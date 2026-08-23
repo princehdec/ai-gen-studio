@@ -26,6 +26,7 @@ export const config = {
     videoModel: process.env.DEFAULT_VIDEO_MODEL || 'bytedance/seedance-2.0-mini',
     imageModel: process.env.DEFAULT_IMAGE_MODEL || 'google/gemini-2.5-flash-image',
     audioModel: process.env.DEFAULT_AUDIO_MODEL || 'openai/gpt-4o-audio-preview',
+    speechModel: process.env.DEFAULT_SPEECH_MODEL || 'fish-audio/s2.1-pro-free:free',
     chatModel: process.env.DEFAULT_CHAT_MODEL || 'openai/gpt-4o-mini',
   },
 };

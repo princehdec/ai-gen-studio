@@ -165,6 +165,56 @@ export function createImages(body) {
 }
 
 // ---------------------------------------------------------------------------
+// Dedicated speech/TTS endpoint
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates speech using OpenRouter's raw-byte /audio/speech endpoint.
+ * This is separate from chat-completions audio output and is required by
+ * speech-only models such as Fish Audio S2.1 Pro Free.
+ */
+export async function createSpeech({ model, input, voice, responseFormat = 'mp3', speed } = {}) {
+  let res;
+  try {
+    const provider = openRouter();
+    const body = {
+      model,
+      input,
+      ...(voice ? { voice } : {}),
+      response_format: responseFormat,
+      ...(Number.isFinite(speed) ? { speed } : {}),
+    };
+    res = await fetch(`${provider.baseUrl}/audio/speech`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(180000),
+    });
+  } catch (err) {
+    const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+    throw new HttpError(timedOut ? 504 : 502, timedOut
+      ? 'Speech generation timed out. Try a shorter script or retry.'
+      : 'Could not reach OpenRouter during speech generation.');
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    let payload = null;
+    try { payload = text ? JSON.parse(text) : null; } catch { /* ignore */ }
+    throw new HttpError(res.status, friendlyMessage(res.status, payload));
+  }
+  const audioBuffer = Buffer.from(await res.arrayBuffer());
+  if (!audioBuffer.length) throw new HttpError(502, 'The speech model returned an empty audio response.');
+  return {
+    audioBuffer,
+    transcript: input,
+    model,
+    contentType: res.headers.get('content-type') || 'audio/mpeg',
+    generationId: res.headers.get('x-generation-id') || null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Audio via streaming chat completions (modalities: ["text","audio"])
 // ---------------------------------------------------------------------------
 
@@ -269,8 +319,13 @@ const FALLBACK_MODELS = {
   ],
   audio: [
     { id: config.defaults.audioModel, name: 'GPT-4o Audio Preview (default)' },
-    { id: 'openai/gpt-4o-mini-tts', name: 'GPT-4o Mini TTS' },
-    { id: 'google/gemini-2.5-flash-preview-tts', name: 'Gemini 2.5 Flash TTS' },
+  ],
+  speech: [
+    { id: config.defaults.speechModel, name: 'Fish Audio: S2.1 Pro Free (free)' },
+    { id: 'fish-audio/s2.1-pro', name: 'Fish Audio: S2.1 Pro' },
+    { id: 'openai/gpt-4o-mini-tts-2025-12-15', name: 'GPT-4o Mini TTS' },
+    { id: 'google/gemini-3.1-flash-tts-preview', name: 'Gemini Flash TTS' },
+    { id: 'mistralai/voxtral-mini-tts-2603', name: 'Mistral Voxtral Mini TTS' },
   ],
 };
 
@@ -278,26 +333,29 @@ const MODEL_PATHS = {
   video: '/videos/models',
   image: '/images/models',
   audio: '/models?output_modalities=audio',
+  speech: '/models?output_modalities=speech',
 };
 
 const modelCache = new Map(); // kind -> { at, items }
 const MODEL_TTL_MS = 5 * 60 * 1000;
 
-export async function getModels(kind) {
-  const cached = modelCache.get(kind);
+export async function getModels(kind, { modality } = {}) {
+  const sourceKind = kind === 'audio' && modality === 'speech' ? 'speech' : kind;
+  const cacheKey = `${kind}:${modality || ''}`;
+  const cached = modelCache.get(cacheKey);
   if (cached && Date.now() - cached.at < MODEL_TTL_MS) return cached.items;
 
   try {
-    const data = await orFetch(MODEL_PATHS[kind], { timeoutMs: 15000 });
+    const data = await orFetch(MODEL_PATHS[sourceKind], { timeoutMs: 15000 });
     const raw = Array.isArray(data?.data) ? data.data : [];
     const items = raw
       .map((m) => ({ id: m.id || m.slug, name: m.name || m.id || m.slug }))
       .filter((m) => !!m.id);
     if (!items.length) throw new Error('empty model list');
-    modelCache.set(kind, { at: Date.now(), items });
+    modelCache.set(cacheKey, { at: Date.now(), items });
     return items;
   } catch {
     // Never block the UI on model-list failures — show curated defaults.
-    return FALLBACK_MODELS[kind];
+    return FALLBACK_MODELS[sourceKind] || FALLBACK_MODELS[kind] || [];
   }
 }

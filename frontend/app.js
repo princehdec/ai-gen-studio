@@ -91,9 +91,14 @@ $$('.tab').forEach((btn) => btn.addEventListener('click', () => {
 const MODEL_KINDS = ['video', 'image', 'audio'];
 const providerByKind = { video: '#v-provider', image: '#i-provider', audio: '#a-provider', chat: '#c-provider' };
 const routeForKind = { video: 'videos', image: 'images', audio: 'audio' };
-const endpointForKind = (kind, provider) => kind === 'chat'
-  ? `/api/v1/chat/models?provider=${encodeURIComponent(provider)}`
-  : `/api/v1/${routeForKind[kind]}/models?provider=${encodeURIComponent(provider)}`;
+const endpointForKind = (kind, provider) => {
+  if (kind === 'chat') return `/api/v1/chat/models?provider=${encodeURIComponent(provider)}`;
+  if (kind === 'audio') {
+    const mode = $('input[name="a-mode"]:checked')?.value || 'speech';
+    return `/api/v1/audio/models?provider=${encodeURIComponent(provider)}&mode=${encodeURIComponent(mode)}`;
+  }
+  return `/api/v1/${routeForKind[kind]}/models?provider=${encodeURIComponent(provider)}`;
+};
 
 async function loadModels(kind, provider = $(providerByKind[kind])?.value || 'openrouter') {
   try {
@@ -102,6 +107,14 @@ async function loadModels(kind, provider = $(providerByKind[kind])?.value || 'op
     if (list) list.innerHTML = (models || []).map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
     const hint = $(`#${kind[0]}-model-hint`);
     if (hint) hint.textContent = default_model ? `Default: ${default_model}` : `${models?.length || 0} models available`;
+    if (kind === 'audio' && default_model) {
+      const modelInput = $('#a-model');
+      const mode = $('input[name="a-mode"]:checked')?.value || 'speech';
+      if (modelInput && (!modelInput.value || modelInput.dataset.mode !== mode)) {
+        modelInput.value = default_model;
+        modelInput.dataset.mode = mode;
+      }
+    }
   } catch (err) {
     const hint = $(`#${kind[0]}-model-hint`);
     if (hint) hint.textContent = `Could not load models — enter an ID manually`;
@@ -390,6 +403,7 @@ $$('input[name="a-mode"]').forEach((r) => r.addEventListener('change', () => {
     ? 'Upbeat lo-fi hip hop track with vinyl crackle, mellow piano and rain ambience'
     : 'Welcome to AI Gen Studio. In today\'s episode…';
   $('#a-voice-wrap').style.display = music ? 'none' : '';
+  loadModels('audio');
 }));
 
 $('#audio-form').addEventListener('submit', async (e) => {

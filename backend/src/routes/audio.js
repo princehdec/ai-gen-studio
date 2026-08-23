@@ -26,7 +26,13 @@ const FORMATS = {
 // '/models' is registered before any '/:id'-style route on purpose.
 audio.get('/models', async (req, res, next) => {
   try {
-    res.json({ models: await or.getModels('audio'), default_model: config.defaults.audioModel });
+    const mode = String(req.query.mode || 'speech').toLowerCase() === 'music' ? 'music' : 'speech';
+    const modality = mode === 'speech' ? 'speech' : 'audio';
+    res.json({
+      models: await or.getModels('audio', { modality }),
+      default_model: mode === 'speech' ? config.defaults.speechModel : config.defaults.audioModel,
+      mode,
+    });
   } catch (err) { next(err); }
 });
 
@@ -57,39 +63,49 @@ audio.post('/', async (req, res, next) => {
     }
 
     const providerConfig = requireProvider(provider, 'audio');
+    const selectedModel = (model || (mode === 'speech' ? config.defaults.speechModel : config.defaults.audioModel)).trim();
+    const dedicatedSpeech = mode === 'speech' && providerConfig.id === 'openrouter';
+    const fishSpeechModel = /^fish-audio\//i.test(selectedModel);
+    const outputFormat = dedicatedSpeech && fmt === 'wav' ? 'mp3' : fmt;
     const id = randomUUID();
     insertGeneration({
       id,
       type: 'audio',
       mode,
       prompt: prompt.trim(),
-      model: (model || config.defaults.audioModel).trim(),
+      model: selectedModel,
       status: 'processing',
       settings: { provider: providerConfig.id, voice: chosenVoice, format: fmt },
     });
 
     try {
-      // OpenRouter exposes audio output through the chat-completions endpoint:
-      // modalities ["text","audio"] + audio:{voice,format}, streaming required.
-      const result = await or.streamAudioCompletion({
-        model: (model || config.defaults.audioModel).trim(),
-        messages: [{ role: 'user', content: prompt.trim() }],
-        modalities: ['text', 'audio'],
-        audio: { voice: chosenVoice, format: fmt },
-        stream: true,
-      });
+      const result = dedicatedSpeech
+        ? await or.createSpeech({
+          model: selectedModel,
+          input: prompt.trim(),
+          // Fish Audio uses its provider-side default voice on OpenRouter.
+          voice: fishSpeechModel ? undefined : chosenVoice,
+          responseFormat: outputFormat,
+        })
+        : await or.streamAudioCompletion({
+          model: selectedModel,
+          messages: [{ role: 'user', content: prompt.trim() }],
+          modalities: ['text', 'audio'],
+          audio: { voice: chosenVoice, format: fmt },
+          stream: true,
+        });
 
-      const rel = storage.newRel(fmt);
+      const rel = storage.newRel(outputFormat);
       const size = await storage.saveBuffer(result.audioBuffer, rel);
       const row = getGeneration(id);
       updateGeneration(id, {
         file_path: rel,
-        mime_type: FORMATS[fmt],
+        mime_type: result.contentType || FORMATS[outputFormat],
         file_size: size,
         cost: null,
         status: 'completed',
         completed_at: nowISO(),
-        settings: JSON.stringify({ ...JSON.parse(row.settings), transcript: result.transcript }),
+        settings: JSON.stringify({ ...JSON.parse(row.settings), format: outputFormat, transcript: result.transcript }),
       });
       res.status(201).json(publicRow(getGeneration(id)));
     } catch (err) {
