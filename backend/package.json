@@ -1,0 +1,19 @@
+{
+  "name": "ai-gen-studio-backend",
+  "version": "1.0.0",
+  "description": "Multi-modal AI generation studio powered by OpenRouter (video / image / audio) with permanent local history.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "multer": "^2.0.2"
+  }
+}
