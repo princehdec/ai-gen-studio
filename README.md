@@ -12,7 +12,7 @@ cp .env.example .env   # if .env doesn't exist yet
 npm start
 ```
 
-Open **http://localhost:8787** — tabs for Video, Image, Audio and a unified History.
+Open **http://localhost:8787** — tabs for Video, Image, Audio, Enhance, Chat and a unified Library.
 
 ## What it does
 
@@ -52,7 +52,7 @@ backend/src/
   db.js            SQLite schema + queries
   openrouter.js    OpenRouter client (video jobs, images, streaming audio, model lists)
   storage/         storage driver abstraction (local disk now, S3-ready interface)
-  routes/          videos.js · images.js · audio.js · generations.js
+  routes/          videos.js · images.js · audio.js · enhance.js · generations.js · providers.js
 frontend/          index.html · app.js · styles.css  (vanilla SPA, no build step)
 storage/files/     permanent generated media
 ```
@@ -102,7 +102,7 @@ To enable automatic updates, add a public GitHub repository URL to the root `pac
 ```json
 "repository": {
   "type": "git",
-  "url": "https://github.com/YOUR_ACCOUNT/YOUR_REPOSITORY.git"
+  "url": "https://github.com/princehdec/ai-gen-studio.git"
 }
 ```
 
