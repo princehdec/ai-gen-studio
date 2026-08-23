@@ -1,6 +1,6 @@
 {
   "name": "ai-gen-studio",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Local-first multi-provider AI generation desktop studio",
   "private": true,
   "repository": {
@@ -8,7 +8,7 @@
     "url": "https://github.com/princehdec/ai-gen-studio.git"
   },
   "main": "electron/main.cjs",
-    "scripts": {
+  "scripts": {
     "desktop": "electron .",
     "desktop:dist": "electron-builder --win nsis",
     "backend": "npm --prefix backend start",
@@ -24,6 +24,14 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "princehdec",
+        "repo": "ai-gen-studio",
+        "releaseType": "release"
+      }
+    ],
     "asar": true,
     "asarUnpack": [
       "backend/**",

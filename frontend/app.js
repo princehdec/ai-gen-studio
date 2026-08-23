@@ -439,13 +439,25 @@ api('/api/v1/enhance/capabilities').then((caps) => {
   const hint = $('#e-capability-hint');
   const method = $('#e-method');
   const realOption = method?.querySelector('option[value="realesrgan"]');
-  if (realOption && !caps.realesrgan) realOption.disabled = true;
-  if (hint) hint.textContent = caps.realesrgan
-    ? 'FFmpeg + Real-ESRGAN ready'
-    : 'FFmpeg ready · Real-ESRGAN optional';
+  const cleanupMode = $('#e-cleanup-mode');
+  const cleanupNotice = $('#e-cleanup-notice');
+  if (realOption) realOption.disabled = !caps.realesrgan;
+  if (cleanupMode) cleanupMode.disabled = !caps.propainter;
+  if (hint) hint.textContent = [
+    caps.ffmpeg ? 'FFmpeg ready' : 'FFmpeg unavailable',
+    caps.realesrgan ? 'Real-ESRGAN AI ready' : 'Real-ESRGAN optional',
+    caps.propainter ? 'ProPainter cleanup ready' : 'ProPainter optional',
+  ].join(' · ');
+  if (cleanupNotice && caps.propainter) cleanupNotice.textContent = 'ProPainter is ready. Use it only for your own, licensed or otherwise authorized footage; not for removing someone else’s attribution or rights notice.';
+  if (!caps.propainter && $('input[name="e-mode"]:checked')?.value === 'cleanup') {
+    $('#e-modes input[value="upscale"]').checked = true;
+    syncEnhanceMode();
+  }
 }).catch(() => {
   const hint = $('#e-capability-hint');
-  if (hint) hint.textContent = 'FFmpeg fallback available';
+  const cleanupMode = $('#e-cleanup-mode');
+  if (cleanupMode) cleanupMode.disabled = true;
+  if (hint) hint.textContent = 'FFmpeg fallback available · optional AI tools not detected';
 });
 
 $('#enhance-form')?.addEventListener('submit', async (e) => {
@@ -674,7 +686,7 @@ const updateProgressBar = $('#update-progress-bar');
 const updateCheck = $('#update-check');
 const updateDownload = $('#update-download');
 const updateInstall = $('#update-install');
-const desktopUpdates = window.desktopUpdates;
+const updateBridge = window.desktopUpdates;
 
 function renderUpdateState(state = {}) {
   if (updateMessage) updateMessage.textContent = state.message || 'Update status unavailable.';
@@ -684,20 +696,20 @@ function renderUpdateState(state = {}) {
   if (updateCheck) updateCheck.disabled = ['checking', 'downloading'].includes(state.status);
 }
 
-if (!desktopUpdates) {
+if (!updateBridge) {
   renderUpdateState({ status: 'dev', message: 'Updates are available after installing a packaged desktop build.' });
 } else {
-  desktopUpdates.getStatus().then(renderUpdateState).catch(() => renderUpdateState({ status: 'error', message: 'Could not read update status.' }));
-  desktopUpdates.onState(renderUpdateState);
+  updateBridge.getStatus().then(renderUpdateState).catch(() => renderUpdateState({ status: 'error', message: 'Could not read update status.' }));
+  updateBridge.onState(renderUpdateState);
 }
 helpOpen?.addEventListener('click', () => helpDialog?.showModal());
 updateCheck?.addEventListener('click', async () => {
   renderUpdateState({ status: 'checking', message: 'Checking for updates…' });
-  if (desktopUpdates) renderUpdateState(await desktopUpdates.check());
+  if (updateBridge) renderUpdateState(await updateBridge.check());
 });
 updateDownload?.addEventListener('click', async () => {
-  if (desktopUpdates) renderUpdateState(await desktopUpdates.download());
+  if (updateBridge) renderUpdateState(await updateBridge.download());
 });
 updateInstall?.addEventListener('click', () => {
-  if (desktopUpdates) desktopUpdates.install();
+  if (updateBridge) updateBridge.install();
 });

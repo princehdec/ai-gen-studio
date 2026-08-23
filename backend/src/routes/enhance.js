@@ -20,11 +20,35 @@ const upload = multer({
   limits: { fileSize: 2 * 1024 * 1024 * 1024, files: 2 },
 });
 
+function firstExisting(candidates) {
+  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || '';
+}
+
+const windowsTools = process.platform === 'win32' ? 'C:\\Tools' : '';
 const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
 const ffprobe = process.env.FFPROBE_PATH || 'ffprobe';
-const realesrgan = process.env.REALESRGAN_PATH || '';
-const propainterPython = process.env.PROPAINTER_PYTHON || 'python';
-const propainterRoot = process.env.PROPAINTER_ROOT || '';
+const realesrgan = process.env.REALESRGAN_PATH || firstExisting([
+  windowsTools && path.join(windowsTools, 'realesrgan', 'realesrgan-ncnn-vulkan.exe'),
+]);
+const propainterRoot = process.env.PROPAINTER_ROOT || firstExisting([
+  windowsTools && path.join(windowsTools, 'ProPainter'),
+]);
+const propainterPython = process.env.PROPAINTER_PYTHON || firstExisting([
+  windowsTools && path.join(windowsTools, 'ProPainter.venv', 'Scripts', 'python.exe'),
+]) || 'python';
+
+function configuredCommand(command) {
+  return Boolean(command) && (!path.isAbsolute(command) || fs.existsSync(command));
+}
+
+function enhancementCapabilities() {
+  const propainterScript = propainterRoot ? path.join(propainterRoot, 'inference_propainter.py') : '';
+  return {
+    ffmpeg: configuredCommand(ffmpeg),
+    realesrgan: configuredCommand(realesrgan),
+    propainter: Boolean(propainterRoot && fs.existsSync(propainterRoot) && fs.existsSync(propainterScript) && configuredCommand(propainterPython)),
+  };
+}
 
 function run(command, args, { cwd, timeoutMs = 30 * 60 * 1000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -142,11 +166,7 @@ function assertMask(file) {
 }
 
 enhance.get('/capabilities', (req, res) => {
-  res.json({
-    ffmpeg: Boolean(ffmpeg),
-    realesrgan: Boolean(realesrgan),
-    propainter: Boolean(propainterRoot),
-  });
+  res.json(enhancementCapabilities());
 });
 
 enhance.post('/', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'mask', maxCount: 1 }]), async (req, res, next) => {
