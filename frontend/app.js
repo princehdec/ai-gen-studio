@@ -75,9 +75,9 @@ function fileToDataUrl(file) {
 let currentTab = 'video';
 const MEMORY_KEY = 'ai-gen-studio:workspace-settings:v1';
 const rememberedFields = [
-  'v-provider', 'v-model', 'v-duration', 'v-resolution', 'v-aspect', 'v-audio',
-  'i-provider', 'i-model', 'i-aspect', 'i-count', 'i-format',
-  'a-provider', 'a-model', 'a-voice', 'a-format', 'a-text', 'a-preview-text',
+  'v-provider', 'v-model', 'v-duration', 'v-resolution', 'v-aspect', 'v-audio', 'v-batch-count',
+  'i-provider', 'i-model', 'i-aspect', 'i-count', 'i-format', 'i-batch-count',
+  'a-provider', 'a-model', 'a-voice', 'a-format', 'a-text', 'a-preview-text', 'a-batch-count',
   'c-provider', 'c-model', 'c-system', 'c-temperature', 'c-max-tokens',
   'e-method', 'e-scale', 'h-search',
 ];
@@ -327,6 +327,66 @@ function busy(btn, isBusy, label) {
   btn.textContent = isBusy ? label : btn.dataset.label;
 }
 
+/* ------------------------------ batch queue -------------------------------- */
+const batchStates = new Map();
+const batchSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function runBatch({ type, count, button, statusId, cancelId, submit, onSuccess, concurrency = 2 }) {
+  const total = Math.max(1, Math.min(100, Number(count) || 1));
+  const state = { next: 0, done: 0, failed: 0, cancelled: false };
+  batchStates.set(type, state);
+  const status = $(statusId);
+  const cancel = $(cancelId);
+  const updateStatus = (prefix = 'Queued') => {
+    const skipped = total - state.next;
+    const remaining = Math.max(0, total - state.done - state.failed);
+    const suffix = state.cancelled ? ` · ${skipped} pending cancelled` : ` · ${remaining} remaining`;
+    if (status) status.textContent = `${prefix}: ${state.done + state.failed}/${total} complete${suffix}`;
+  };
+  if (cancel) { cancel.hidden = false; cancel.onclick = () => { state.cancelled = true; updateStatus('Cancelling'); }; }
+  updateStatus();
+  try {
+    const worker = async () => {
+      while (!state.cancelled) {
+        const index = state.next++;
+        if (index >= total) return;
+        try {
+          const result = await submit(index);
+          await onSuccess(result, index);
+          state.done += 1;
+        } catch (err) {
+          state.failed += 1;
+          console.warn(`[batch:${type}] item ${index + 1} failed:`, err.message);
+        }
+        updateStatus();
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, total) }, worker));
+  } finally {
+    if (batchStates.get(type) === state) batchStates.delete(type);
+    if (cancel) { cancel.hidden = true; cancel.onclick = null; }
+    if (status) {
+      const cancelled = state.cancelled && state.next < total;
+      status.textContent = cancelled
+        ? `Cancelled · ${state.done} complete, ${state.failed} failed`
+        : `Finished · ${state.done} complete${state.failed ? `, ${state.failed} failed` : ''}`;
+    }
+    busy(button, false);
+  }
+}
+
+async function waitForVideoTerminal(gen) {
+  if (!gen?.id || ['completed', 'failed'].includes(gen.status)) return gen;
+  for (let attempt = 0; attempt < 900; attempt += 1) {
+    await batchSleep(4000);
+    try {
+      const current = await api(`/api/v1/videos/${encodeURIComponent(gen.id)}`);
+      if (current.status === 'completed' || current.status === 'failed') return current;
+    } catch { /* next poll retries */ }
+  }
+  return gen;
+}
+
 /* ================================ VIDEO =================================== */
 const activeJobs = new Map(); // id -> { el }
 
@@ -361,7 +421,7 @@ $('#video-form').addEventListener('submit', async (e) => {
   if (mode === 'first_last' && !lastFile) return showError(errId, new Error('First + Last frame mode also needs a last-frame image.'));
   if (mode === 'reference' && !refFiles.length) return showError(errId, new Error('Reference mode needs at least one reference image.'));
 
-  busy(btn, true, 'Submitting…');
+  busy(btn, true, 'Queueing…');
   try {
     const payload = {
       prompt,
@@ -376,13 +436,19 @@ $('#video-form').addEventListener('submit', async (e) => {
     if (needsFirst) payload.first_frame = await fileToDataUrl(firstFile);
     if (mode === 'first_last') payload.last_frame = await fileToDataUrl(lastFile);
     if (mode === 'reference') payload.references = await Promise.all(refFiles.map(fileToDataUrl));
-
-    const gen = await api('/api/v1/videos', { method: 'POST', body: payload });
-    trackJob(gen);
+    await runBatch({
+      type: 'video',
+      count: $('#v-batch-count').value,
+      button: btn,
+      statusId: '#v-batch-status',
+      cancelId: '#v-batch-cancel',
+      concurrency: 1,
+      submit: () => api('/api/v1/videos', { method: 'POST', body: payload }),
+      onSuccess: async (gen) => { trackJob(gen); await waitForVideoTerminal(gen); },
+    });
     $('#tab-video').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (err) {
     showError(errId, err);
-  } finally {
     busy(btn, false);
   }
 });
@@ -432,26 +498,29 @@ $('#image-form').addEventListener('submit', async (e) => {
   if (!prompt) return showError(errId, new Error('Please enter a prompt.'));
   const files = [...$('#i-inputs').files];
 
-  busy(btn, true, 'Generating…');
+  busy(btn, true, 'Queueing…');
   try {
-    const gens = await api('/api/v1/images', {
-      method: 'POST',
-      body: {
-        prompt,
-        provider: $('#i-provider').value,
-        model: $('#i-model').value.trim() || undefined,
-        n: Number($('#i-count').value),
-        aspect_ratio: $('#i-aspect').value || undefined,
-        output_format: $('#i-format').value,
-        input_images: await Promise.all(files.map(fileToDataUrl)),
-      },
+    const payload = {
+      prompt,
+      provider: $('#i-provider').value,
+      model: $('#i-model').value.trim() || undefined,
+      n: Number($('#i-count').value),
+      aspect_ratio: $('#i-aspect').value || undefined,
+      output_format: $('#i-format').value,
+      input_images: await Promise.all(files.map(fileToDataUrl)),
+    };
+    await runBatch({
+      type: 'image',
+      count: $('#i-batch-count').value,
+      button: btn,
+      statusId: '#i-batch-status',
+      cancelId: '#i-batch-cancel',
+      submit: () => api('/api/v1/images', { method: 'POST', body: payload }),
+      onSuccess: (gens) => { gens.reverse().forEach((g) => $('#i-results').prepend(renderCard(g))); },
     });
-    gens.reverse().forEach((g) => $('#i-results').prepend(renderCard(g)));
-    $('#i-prompt').value = '';
     refreshHistoryCount();
   } catch (err) {
     showError(errId, err);
-  } finally {
     busy(btn, false);
   }
 });
@@ -528,25 +597,28 @@ $('#audio-form').addEventListener('submit', async (e) => {
   const prompt = $('#a-text').value.trim();
   if (!prompt) return showError(errId, new Error('Enter some text first.'));
 
-  busy(btn, true, 'Generating…');
+  busy(btn, true, 'Queueing…');
   try {
-    const gen = await api('/api/v1/audio', {
-      method: 'POST',
-      body: {
-        prompt,
-        provider: $('#a-provider').value,
-        mode: $('input[name="a-mode"]:checked').value,
-        model: $('#a-model').value.trim() || undefined,
-        voice: $('#a-voice').value,
-        format: $('#a-format').value,
-      },
+    const payload = {
+      prompt,
+      provider: $('#a-provider').value,
+      mode: $('input[name="a-mode"]:checked').value,
+      model: $('#a-model').value.trim() || undefined,
+      voice: $('#a-voice').value,
+      format: $('#a-format').value,
+    };
+    await runBatch({
+      type: 'audio',
+      count: $('#a-batch-count').value,
+      button: btn,
+      statusId: '#a-batch-status',
+      cancelId: '#a-batch-cancel',
+      submit: () => api('/api/v1/audio', { method: 'POST', body: payload }),
+      onSuccess: (gen) => { $('#a-results').prepend(renderCard(gen)); },
     });
-    $('#a-results').prepend(renderCard(gen));
-    $('#a-text').value = '';
     refreshHistoryCount();
   } catch (err) {
     showError(errId, err);
-  } finally {
     busy(btn, false);
   }
 });
