@@ -1,5 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+contextBridge.exposeInMainWorld('desktopInfo', {
+  get: () => ipcRenderer.invoke('app:info'),
+});
+
 contextBridge.exposeInMainWorld('desktopUpdates', {
   getStatus: () => ipcRenderer.invoke('updates:status'),
   check: () => ipcRenderer.invoke('updates:check'),

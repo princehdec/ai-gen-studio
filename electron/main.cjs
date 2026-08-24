@@ -113,6 +113,14 @@ function setupAutoUpdater() {
   autoUpdater.on('error', (err) => setUpdateState({ status: 'error', message: `Update check failed: ${err.message}` }));
 }
 
+ipcMain.handle('app:info', () => ({
+  name: 'AI Gen Studio',
+  version: app.getVersion(),
+  packaged: app.isPackaged,
+  platform: process.platform,
+  arch: process.arch,
+}));
+
 ipcMain.handle('updates:status', () => updateState);
 ipcMain.handle('updates:check', async () => {
   if (!app.isPackaged) return setUpdateState({ status: 'dev', message: 'Updates are available after installing a packaged desktop build.' });

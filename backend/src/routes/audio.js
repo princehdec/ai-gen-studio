@@ -23,7 +23,30 @@ const FORMATS = {
   opus: 'audio/opus',
 };
 
-// '/models' is registered before any '/:id'-style route on purpose.
+// Preview audio is intentionally not persisted to the Library.
+audio.post('/preview', async (req, res, next) => {
+  try {
+    const { prompt, model, provider = 'openrouter', voice } = req.body ?? {};
+    const input = String(prompt || '').trim();
+    if (!input) throw badRequest('Enter preview text first.');
+    const providerConfig = requireProvider(provider, 'audio');
+    if (providerConfig.id !== 'openrouter') throw badRequest('Voice preview currently requires OpenRouter.');
+    const selectedModel = String(model || config.defaults.speechModel).trim();
+    const result = await or.createSpeech({
+      model: selectedModel,
+      input: input.slice(0, 240),
+      voice: /^fish-audio\//i.test(selectedModel) ? undefined : String(voice || 'alloy').toLowerCase(),
+      responseFormat: 'mp3',
+    });
+    res.set({
+      'Content-Type': result.contentType || 'audio/mpeg',
+      'Content-Length': String(result.audioBuffer.length),
+      'Cache-Control': 'no-store',
+    });
+    res.send(result.audioBuffer);
+  } catch (err) { next(err); }
+});
+
 audio.get('/models', async (req, res, next) => {
   try {
     const mode = String(req.query.mode || 'speech').toLowerCase() === 'music' ? 'music' : 'speech';

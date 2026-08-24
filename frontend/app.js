@@ -71,6 +71,64 @@ function fileToDataUrl(file) {
   });
 }
 
+/* ------------------------ local workspace memory ------------------------- */
+let currentTab = 'video';
+const MEMORY_KEY = 'ai-gen-studio:workspace-settings:v1';
+const rememberedFields = [
+  'v-provider', 'v-model', 'v-duration', 'v-resolution', 'v-aspect', 'v-audio',
+  'i-provider', 'i-model', 'i-aspect', 'i-count', 'i-format',
+  'a-provider', 'a-model', 'a-voice', 'a-format', 'a-text', 'a-preview-text',
+  'c-provider', 'c-model', 'c-system', 'c-temperature', 'c-max-tokens',
+  'e-method', 'e-scale', 'h-search',
+];
+const rememberedRadioGroups = ['v-mode', 'a-mode', 'e-mode'];
+
+function readWorkspaceMemory() {
+  try { return JSON.parse(localStorage.getItem(MEMORY_KEY) || '{}'); } catch { return {}; }
+}
+
+function restoreWorkspaceSettings() {
+  const memory = readWorkspaceMemory();
+  for (const id of rememberedFields) {
+    const el = document.getElementById(id);
+    if (!el || memory[id] === undefined) continue;
+    if (el.type === 'checkbox') el.checked = Boolean(memory[id]);
+    else { el.value = String(memory[id]); if (id.endsWith('-model')) el.dataset.remembered = 'true'; }
+  }
+  for (const name of rememberedRadioGroups) {
+    const value = memory[`radio:${name}`];
+    if (value) {
+      const radio = document.querySelector(`input[name="${name}"][value="${CSS.escape(value)}"]`);
+      if (radio) radio.checked = true;
+    }
+  }
+}
+
+function saveWorkspaceSettings() {
+  const memory = readWorkspaceMemory();
+  for (const id of rememberedFields) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    memory[id] = el.type === 'checkbox' ? el.checked : el.value;
+  }
+  for (const name of rememberedRadioGroups) {
+    const radio = document.querySelector(`input[name="${name}"]:checked`);
+    if (radio) memory[`radio:${name}`] = radio.value;
+  }
+  if (typeof currentTab === 'string') memory.activeTab = currentTab;
+  try { localStorage.setItem(MEMORY_KEY, JSON.stringify(memory)); } catch { /* storage may be unavailable */ }
+}
+
+restoreWorkspaceSettings();
+for (const id of rememberedFields) {
+  const el = document.getElementById(id);
+  el?.addEventListener('input', saveWorkspaceSettings);
+  el?.addEventListener('change', saveWorkspaceSettings);
+}
+for (const name of rememberedRadioGroups) {
+  $$(`input[name="${name}"]`).forEach((radio) => radio.addEventListener('change', saveWorkspaceSettings));
+}
+
 /* --------------------------------- tabs ---------------------------------- */
 $$('.tab').forEach((btn) => btn.addEventListener('click', () => {
   $$('.tab').forEach((b) => {
@@ -84,8 +142,11 @@ $$('.tab').forEach((btn) => btn.addEventListener('click', () => {
     p.hidden = !active;
   });
   currentTab = btn.dataset.tab;
+  saveWorkspaceSettings();
   if (currentTab === 'history') loadHistory(true).catch((err) => showError('#v-error', err));
 }));
+const rememberedTab = readWorkspaceMemory().activeTab;
+if (rememberedTab) document.querySelector(`.tab[data-tab="${CSS.escape(rememberedTab)}"]`)?.click();
 
 /* ------------------------------- model lists ------------------------------ */
 const MODEL_KINDS = ['video', 'image', 'audio'];
@@ -110,7 +171,7 @@ async function loadModels(kind, provider = $(providerByKind[kind])?.value || 'op
     if (kind === 'audio' && default_model) {
       const modelInput = $('#a-model');
       const mode = $('input[name="a-mode"]:checked')?.value || 'speech';
-      if (modelInput && (!modelInput.value || modelInput.dataset.mode !== mode)) {
+      if (modelInput && (!modelInput.value || (!modelInput.dataset.remembered && modelInput.dataset.mode !== mode))) {
         modelInput.value = default_model;
         modelInput.dataset.mode = mode;
       }
@@ -396,6 +457,12 @@ $('#image-form').addEventListener('submit', async (e) => {
 });
 
 /* ------------------------------- AUDIO tab -------------------------------- */
+let previewUrl = null;
+const previewControl = $('#a-preview-control');
+const previewButton = $('#a-preview');
+const previewPlayer = $('#a-preview-player');
+const previewStatus = $('#a-preview-status');
+
 $$('input[name="a-mode"]').forEach((r) => r.addEventListener('change', () => {
   const music = $('input[name="a-mode"]:checked').value === 'music';
   $('#a-text-label').textContent = music ? 'Describe the music / sound effect' : 'Script to narrate';
@@ -403,8 +470,53 @@ $$('input[name="a-mode"]').forEach((r) => r.addEventListener('change', () => {
     ? 'Upbeat lo-fi hip hop track with vinyl crackle, mellow piano and rain ambience'
     : 'Welcome to AI Gen Studio. In today\'s episode…';
   $('#a-voice-wrap').style.display = music ? 'none' : '';
+  if (previewControl) previewControl.hidden = music;
+  $('#a-model').dataset.remembered = 'false';
   loadModels('audio');
 }));
+
+previewButton?.addEventListener('click', async () => {
+  const text = $('#a-preview-text').value.trim();
+  const model = $('#a-model').value.trim();
+  if (!text) { previewStatus.textContent = 'Enter a short preview sentence first.'; return; }
+  if ($('#a-provider').value !== 'openrouter') { previewStatus.textContent = 'Voice preview currently requires OpenRouter.'; return; }
+  previewButton.disabled = true;
+  previewButton.textContent = 'Generating preview…';
+  previewStatus.textContent = 'Creating a short sample…';
+  try {
+    const response = await fetch('/api/v1/audio/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: $('#a-provider').value,
+        model,
+        prompt: text,
+        voice: $('#a-voice').value,
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error?.message || `Preview failed (HTTP ${response.status}).`);
+    }
+    const blob = await response.blob();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(blob);
+    previewPlayer.src = previewUrl;
+    previewPlayer.hidden = false;
+    previewStatus.textContent = 'Preview ready. Press play to listen again.';
+    await previewPlayer.play().catch(() => {});
+  } catch (err) {
+    previewStatus.textContent = err.message;
+  } finally {
+    previewButton.disabled = false;
+    previewButton.textContent = 'Preview selected voice';
+  }
+});
+
+$('#a-provider')?.addEventListener('change', () => {
+  if (previewButton) previewButton.disabled = $('#a-provider').value !== 'openrouter';
+});
+$('input[name="a-mode"]:checked')?.dispatchEvent(new Event('change'));
 
 $('#audio-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -510,7 +622,6 @@ $('#enhance-form')?.addEventListener('submit', async (e) => {
 /* =============================== HISTORY =================================== */
 const H_PAGE = 24;
 let hState = { type: '', q: '', offset: 0, total: 0 };
-let currentTab = 'video';
 let historyDirty = true;
 
 $('#h-chips').addEventListener('click', (e) => {
@@ -669,6 +780,12 @@ settingsContainer?.addEventListener('click', async (e) => {
   }
 });
 
+$('#settings-reset-memory')?.addEventListener('click', () => {
+  localStorage.removeItem(MEMORY_KEY);
+  settingsStatus.textContent = 'Remembered choices cleared. Reloading…';
+  setTimeout(() => window.location.reload(), 350);
+});
+
 $('#settings-save')?.addEventListener('click', async () => {
   const cards = $$('.provider-card', settingsContainer);
   try {
@@ -690,6 +807,21 @@ $('#settings-save')?.addEventListener('click', async () => {
   } catch (err) {
     settingsStatus.textContent = err.message;
   }
+});
+
+/* ----------------------------------- About --------------------------------- */
+const aboutDialog = $('#about-dialog');
+$('#about-open')?.addEventListener('click', async () => {
+  try {
+    const info = await window.desktopInfo?.get();
+    $('#app-version').textContent = info?.version ? `v${info.version}` : 'Development build';
+    $('#app-build-info').textContent = info?.packaged
+      ? `${info.platform} · ${info.arch} · packaged desktop build`
+      : 'Development build · updates require the installed packaged app';
+  } catch {
+    $('#app-version').textContent = 'Unavailable';
+  }
+  aboutDialog?.showModal();
 });
 
 /* ----------------------------- help & updates ------------------------------ */
