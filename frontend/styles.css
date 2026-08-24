@@ -549,3 +549,12 @@ textarea, #v-prompt, #i-prompt, #a-text, #c-prompt { font-family: "JetBrains Mon
   #tab-video .gen-form .error-banner, #tab-image .gen-form .error-banner, #tab-audio .gen-form .error-banner { grid-column: 1 / -1; }
 }
 @media (max-width: 700px) { .batch-status { flex-basis: 100%; } }
+
+.voice-clone-control {
+  display: grid; gap: 12px; padding: 14px; margin-top: 12px;
+  border: 1px solid #e5e5e4; border-radius: 8px;
+  background: linear-gradient(135deg, #fafafa, #f5f4ff);
+}
+.voice-clone-control p { margin: 0; }
+.voice-clone-control .field { margin: 0; }
+.voice-clone-control .check { margin: 0; }

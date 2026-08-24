@@ -71,13 +71,36 @@ function fileToDataUrl(file) {
   });
 }
 
+function audioReferenceToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const allowed = new Set(['audio/wav', 'audio/x-wav', 'audio/wave', 'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/m4a', 'audio/ogg', 'audio/opus', 'audio/flac', 'audio/x-flac']);
+    if (!allowed.has(String(file?.type || '').toLowerCase())) return reject(new Error('Reference audio must be WAV, MP3, M4A, OGG/Opus or FLAC.'));
+    if (file.size > 15 * 1024 * 1024) return reject(new Error('Reference audio must be 15 MB or smaller.'));
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error(`Could not read "${file.name}".`));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function getVoiceReferencePayload() {
+  const file = $('#a-voice-reference')?.files?.[0];
+  if (!file) return {};
+  if (!$('#a-voice-rights')?.checked) throw new Error('Confirm that you own this voice or have permission to use the reference recording.');
+  return {
+    reference_audio: await audioReferenceToDataUrl(file),
+    reference_transcript: $('#a-voice-reference-transcript')?.value.trim() || undefined,
+    rights_confirmed: true,
+  };
+}
+
 /* ------------------------ local workspace memory ------------------------- */
 let currentTab = 'video';
 const MEMORY_KEY = 'ai-gen-studio:workspace-settings:v1';
 const rememberedFields = [
   'v-provider', 'v-model', 'v-duration', 'v-resolution', 'v-aspect', 'v-audio', 'v-batch-count',
   'i-provider', 'i-model', 'i-aspect', 'i-count', 'i-format', 'i-batch-count',
-  'a-provider', 'a-model', 'a-voice', 'a-format', 'a-text', 'a-preview-text', 'a-batch-count',
+  'a-provider', 'a-model', 'a-voice', 'a-format', 'a-text', 'a-preview-text', 'a-voice-reference-transcript', 'a-batch-count',
   'c-provider', 'c-model', 'c-system', 'c-temperature', 'c-max-tokens',
   'e-method', 'e-scale', 'h-search',
 ];
@@ -540,6 +563,7 @@ $$('input[name="a-mode"]').forEach((r) => r.addEventListener('change', () => {
     : 'Welcome to AI Gen Studio. In today\'s episode…';
   $('#a-voice-wrap').style.display = music ? 'none' : '';
   if (previewControl) previewControl.hidden = music;
+  if ($('#a-clone-control')) $('#a-clone-control').hidden = music;
   $('#a-model').dataset.remembered = 'false';
   loadModels('audio');
 }));
@@ -561,6 +585,7 @@ previewButton?.addEventListener('click', async () => {
         model,
         prompt: text,
         voice: $('#a-voice').value,
+        ...(await getVoiceReferencePayload()),
       }),
     });
     if (!response.ok) {
@@ -606,6 +631,7 @@ $('#audio-form').addEventListener('submit', async (e) => {
       model: $('#a-model').value.trim() || undefined,
       voice: $('#a-voice').value,
       format: $('#a-format').value,
+      ...(await getVoiceReferencePayload()),
     };
     await runBatch({
       type: 'audio',

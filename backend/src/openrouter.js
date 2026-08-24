@@ -173,7 +173,7 @@ export function createImages(body) {
  * This is separate from chat-completions audio output and is required by
  * speech-only models such as Fish Audio S2.1 Pro Free.
  */
-export async function createSpeech({ model, input, voice, responseFormat = 'mp3', speed } = {}) {
+export async function createSpeech({ model, input, voice, responseFormat = 'mp3', speed, inputReferences } = {}) {
   let res;
   try {
     const provider = openRouter();
@@ -183,6 +183,7 @@ export async function createSpeech({ model, input, voice, responseFormat = 'mp3'
       ...(voice ? { voice } : {}),
       response_format: responseFormat,
       ...(Number.isFinite(speed) ? { speed } : {}),
+      ...(Array.isArray(inputReferences) && inputReferences.length ? { input_references: inputReferences } : {}),
     };
     res = await fetch(`${provider.baseUrl}/audio/speech`, {
       method: 'POST',
