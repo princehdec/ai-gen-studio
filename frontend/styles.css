@@ -757,3 +757,5 @@ input[type="file"] { color: #777b88; }
 
 @media (max-width: 760px) { .studio-hero { margin-top: 28px; } .studio-hero-top { display: grid; gap: 10px; } .studio-model-badge { justify-self: center; } .gallery-head { display: grid; } .gallery-actions { width: 100%; } .gallery-actions input { flex: 1; width: auto; } .studio-gallery-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .composer-footer { flex-wrap: wrap; } .composer-spacer { display: none; } .studio-run { margin-left: auto; } }
 @media (max-width: 480px) { .studio-gallery-grid { grid-template-columns: 1fr; } .gallery-actions { display: grid; grid-template-columns: 1fr; } .gallery-library { justify-self: start; } }
+
+.panel { scroll-margin-top: 118px; }

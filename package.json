@@ -1,6 +1,6 @@
 {
   "name": "ai-gen-studio",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "Local-first multi-provider AI generation desktop studio",
   "private": true,
   "repository": {

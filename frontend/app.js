@@ -167,6 +167,8 @@ $$('.tab').forEach((btn) => btn.addEventListener('click', () => {
   });
   currentTab = btn.dataset.tab;
   saveWorkspaceSettings();
+  const selectedPanel = document.getElementById(`tab-${currentTab}`);
+  if (selectedPanel) requestAnimationFrame(() => selectedPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   if (currentTab === 'history') loadHistory(true).catch((err) => showError('#v-error', err));
 }));
 const rememberedTab = readWorkspaceMemory().activeTab;
