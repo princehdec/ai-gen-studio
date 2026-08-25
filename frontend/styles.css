@@ -682,17 +682,17 @@ main { width: min(1320px, 100%); }
 .gen-form, .settings-dialog, .ugc-sidebar, .ugc-workspace { box-shadow: var(--shadow); border-color: var(--border); background: var(--panel); }
 .gen-form { background: var(--panel); }
 .field-label { color: #777b88; }
-input[type="text"], input[type="search"], textarea, select, input[list] { color: var(--text); background: #fff; border-color: #dfe2ea; }
-.settings-dialog input[type="url"], .settings-dialog input[type="password"], .settings-dialog input[type="text"], .settings-dialog select, .settings-dialog textarea {
+input[type="text"], input[type="search"], input[type="number"], textarea, select, input[list] { color: var(--text); background: #fff; border-color: #dfe2ea; }
+.settings-dialog input[type="url"], .settings-dialog input[type="password"], .settings-dialog input[type="text"], .settings-dialog input[type="number"], .settings-dialog select, .settings-dialog textarea {
   color: #242630;
   background: #ffffff;
   border-color: #dfe2ea;
 }
-.settings-dialog input[type="url"]:hover, .settings-dialog input[type="password"]:hover, .settings-dialog input[type="text"]:hover, .settings-dialog select:hover, .settings-dialog textarea:hover {
+.settings-dialog input[type="url"]:hover, .settings-dialog input[type="password"]:hover, .settings-dialog input[type="text"]:hover, .settings-dialog input[type="number"]:hover, .settings-dialog select:hover, .settings-dialog textarea:hover {
   background: #ffffff;
   border-color: #c9cde0;
 }
-.settings-dialog input[type="url"]:focus, .settings-dialog input[type="password"]:focus, .settings-dialog input[type="text"]:focus, .settings-dialog select:focus, .settings-dialog textarea:focus {
+.settings-dialog input[type="url"]:focus, .settings-dialog input[type="password"]:focus, .settings-dialog input[type="text"]:focus, .settings-dialog input[type="number"]:focus, .settings-dialog select:focus, .settings-dialog textarea:focus {
   color: #20222b;
   background: #ffffff;
 }
@@ -724,6 +724,17 @@ input[type="file"] { color: #777b88; }
 .composer-select select { width: auto; min-width: 112px; padding: 6px 8px; border: 0; background: #f7f7fb; color: #4f5360; font-size: 12px; }
 .composer-chip { padding: 7px 10px; border: 0; border-radius: 999px; background: #f3f4fa; color: #797c88; cursor: pointer; font: inherit; font-size: 11px; }
 .composer-chip:hover { color: var(--accent); background: #eeefff; }
+.studio-composer .composer-select select, .studio-composer .composer-chip {
+  color: #4f5360 !important;
+  background: #f7f7fb !important;
+  border: 1px solid #e3e5ed !important;
+  color-scheme: light;
+}
+.studio-composer .composer-chip:hover, .studio-composer .composer-chip:focus-visible {
+  color: var(--accent) !important;
+  background: #eeefff !important;
+  border-color: #cfd0f7 !important;
+}
 .composer-spacer { flex: 1; }
 .studio-run { padding: 9px 14px; font-size: 12px; }
 .studio-gallery { margin: 0 auto 12px; padding: 0 0 8px; }
