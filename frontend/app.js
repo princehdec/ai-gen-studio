@@ -232,9 +232,11 @@ api('/api/v1/providers').then(({ providers }) => {
   providerState = providers || [];
   const configured = providerState.filter((p) => p.configured).length;
   const el = $('#key-status');
-  el.hidden = false;
-  el.classList.add(configured ? 'good' : 'bad');
-  el.textContent = configured ? `${configured} provider${configured > 1 ? 's' : ''} connected` : 'Setup a provider to start';
+  if (el) {
+    el.hidden = false;
+    el.classList.add(configured ? 'good' : 'bad');
+    el.textContent = configured ? `${configured} provider${configured > 1 ? 's' : ''} connected` : 'Setup a provider to start';
+  }
   syncProviderOptions();
 }).catch(() => {});
 
