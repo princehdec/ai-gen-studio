@@ -154,7 +154,7 @@ for (const name of rememberedRadioGroups) {
 }
 
 /* --------------------------------- tabs ---------------------------------- */
-const studioComposerTabs = new Set(['video', 'ugc', 'image', 'audio']);
+const studioComposerTabs = new Set(['video', 'ugc', 'image', 'audio', 'chat']);
 function syncStudioSurface(tab = currentTab) {
   const hero = $('.studio-hero');
   const gallery = $('.studio-gallery');
@@ -1304,6 +1304,74 @@ const studioPrompt = $('#studio-prompt');
 const studioWorkspace = $('#studio-workspace-select');
 let studioGalleryMode = 'inspiration';
 let studioGalleryRows = [];
+const studioInlineContent = $('#studio-inline-content');
+const studioFormStaging = $('#studio-form-staging');
+const inlineWorkspaceToggle = $('#inline-workspace-toggle');
+const inlineWorkspaceSummary = $('#inline-workspace-summary');
+const inlineFormSelectors = {
+  video: '#video-form',
+  ugc: '#ugc-brief-form',
+  image: '#image-form',
+  audio: '#audio-form',
+  chat: '#chat-form',
+};
+const inlinePromptSelectors = {
+  video: '#v-prompt',
+  ugc: '#ugc-product',
+  image: '#i-prompt',
+  audio: '#a-text',
+  chat: '#c-prompt',
+};
+const inlineWorkspaceSummaries = {
+  video: 'Model, mode, duration, resolution and batch',
+  ugc: 'Brief, platform, planner and references',
+  image: 'Model, aspect ratio, format and batch',
+  audio: 'Mode, voice, format and batch',
+  chat: 'Provider, model, instructions and parameters',
+};
+const inlineFormOrigins = new Map();
+const inlinePromptByFormId = new Map();
+Object.entries(inlineFormSelectors).forEach(([tab, selector]) => {
+  const form = $(selector);
+  if (!form || !form.parentNode) return;
+  const placeholder = document.createComment(`inline-origin:${form.id}`);
+  form.parentNode.insertBefore(placeholder, form);
+  inlineFormOrigins.set(form.id, placeholder);
+  inlinePromptByFormId.set(form.id, inlinePromptSelectors[tab]);
+  if (studioFormStaging) studioFormStaging.append(form);
+});
+
+function restoreInlineForm(form) {
+  if (!form) return;
+  form.classList.remove('composer-inline-form');
+  form.querySelector('.form-heading')?.removeAttribute('hidden');
+  const prompt = $(inlinePromptByFormId.get(form.id));
+  prompt?.closest('.field')?.removeAttribute('hidden');
+  if (studioFormStaging && form.parentNode !== studioFormStaging) studioFormStaging.append(form);
+}
+
+function setInlineWorkspace(tab = studioWorkspace?.value || 'video') {
+  const form = $(inlineFormSelectors[tab] || inlineFormSelectors.video);
+  if (!form || !studioInlineContent) return;
+  const currentForm = studioInlineContent.querySelector(':scope > form');
+  if (currentForm && currentForm !== form) restoreInlineForm(currentForm);
+  studioInlineContent.replaceChildren(form);
+  form.classList.add('composer-inline-form');
+  form.querySelector('.form-heading')?.setAttribute('hidden', 'true');
+  const prompt = $(inlinePromptSelectors[tab]);
+  prompt?.closest('.field')?.setAttribute('hidden', 'true');
+  if (inlineWorkspaceSummary) inlineWorkspaceSummary.textContent = inlineWorkspaceSummaries[tab] || 'Workspace controls';
+}
+
+function setInlineOptionsOpen(open) {
+  if (!studioInlineContent || !inlineWorkspaceToggle) return;
+  studioInlineContent.hidden = !open;
+  inlineWorkspaceToggle.setAttribute('aria-expanded', String(open));
+  inlineWorkspaceToggle.textContent = open ? 'Hide options' : 'Show options';
+}
+
+inlineWorkspaceToggle?.addEventListener('click', () => setInlineOptionsOpen(studioInlineContent?.hidden));
+
 
 function selectStudioTab(tab) {
   document.querySelector(`.tab[data-tab="${CSS.escape(tab)}"]`)?.click();
@@ -1328,7 +1396,19 @@ function syncStudioComposer() {
   }
 }
 
-studioWorkspace?.addEventListener('change', syncStudioComposer);
+studioWorkspace?.addEventListener('change', () => {
+  const tab = studioWorkspace.value || 'video';
+  syncStudioComposer();
+  setInlineWorkspace(tab);
+  selectStudioTab(tab);
+});
+$$('.tab').forEach((btn) => btn.addEventListener('click', () => {
+  if (studioComposerTabs.has(btn.dataset.tab)) {
+    if (studioWorkspace) studioWorkspace.value = btn.dataset.tab;
+    setInlineWorkspace(btn.dataset.tab);
+    syncStudioComposer();
+  }
+}));
 ['#v-aspect', '#v-duration', '#v-audio', '#ugc-platform', '#ugc-duration', '#ugc-voiceover'].forEach((selector) => $(selector)?.addEventListener('input', syncStudioComposer));
 ['#v-aspect', '#v-duration', '#v-audio', '#ugc-platform', '#ugc-duration', '#ugc-voiceover'].forEach((selector) => $(selector)?.addEventListener('change', syncStudioComposer));
 $('#studio-format-chip')?.addEventListener('click', () => selectStudioTab(studioWorkspace?.value || 'video'));
@@ -1336,20 +1416,21 @@ $('#studio-audio-chip')?.addEventListener('click', () => selectStudioTab(studioW
 
 $('#studio-run')?.addEventListener('click', () => {
   const tab = studioWorkspace?.value || 'video';
-  const targets = { video: '#v-prompt', image: '#i-prompt', audio: '#a-text', chat: '#c-prompt' };
-  if (tab === 'ugc') {
-    selectStudioTab('ugc');
-    if (studioPrompt?.value.trim() && !$('#ugc-product').value.trim()) $('#ugc-product').value = studioPrompt.value.trim().slice(0, 240);
-    $('#ugc-product')?.focus();
+  const prompt = studioPrompt?.value.trim() || '';
+  const target = $(inlinePromptSelectors[tab]);
+  const form = $(inlineFormSelectors[tab]);
+  setInlineWorkspace(tab);
+  selectStudioTab(tab);
+  if (!prompt) {
+    setInlineOptionsOpen(false);
+    studioPrompt?.focus();
     return;
   }
-  const target = $(targets[tab]);
-  if (target && studioPrompt?.value.trim()) {
-    target.value = studioPrompt.value.trim();
+  if (target) {
+    target.value = tab === 'ugc' ? prompt.slice(0, 240) : prompt;
     target.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  selectStudioTab(tab);
-  target?.focus();
+  form?.requestSubmit();
 });
 
 $('#studio-add-reference')?.addEventListener('click', () => {
@@ -1362,6 +1443,11 @@ $('#studio-open-assets')?.addEventListener('click', () => {
   $('#ugc-assets')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
 $('#studio-open-library')?.addEventListener('click', () => selectStudioTab('history'));
+const initialComposerTab = studioComposerTabs.has(currentTab) ? currentTab : (studioWorkspace?.value || 'video');
+if (studioWorkspace && studioComposerTabs.has(currentTab)) studioWorkspace.value = currentTab;
+setInlineWorkspace(initialComposerTab);
+setInlineOptionsOpen(false);
+syncStudioComposer();
 
 function galleryMediaMarkup(row) {
   if (row.file_url && row.type === 'image') return `<img loading="lazy" src="${esc(row.file_url)}" alt="${esc(row.prompt || row.name || '')}">`;

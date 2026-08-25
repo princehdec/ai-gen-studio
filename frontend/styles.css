@@ -715,6 +715,20 @@ input[type="file"] { color: #777b88; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #5cdbad; }
 .studio-composer { margin-top: 25px; padding: 14px 17px 12px; border: 1px solid #e3e5ed; border-radius: 18px; background: rgba(255,255,255,.92); box-shadow: 0 18px 45px rgba(57,59,100,.1); text-align: left; }
 .composer-tools { display: flex; gap: 7px; }
+.studio-inline-workspace { margin-top: 10px; border-top: 1px solid #f0f1f5; }
+.inline-workspace-head { display: flex; align-items: center; gap: 9px; min-height: 38px; }
+.inline-workspace-title { color: #4f5360; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.inline-workspace-summary { min-width: 0; overflow: hidden; color: #9a9da7; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.inline-workspace-toggle { margin-left: auto; padding: 6px 9px; border: 1px solid #e3e5ed; border-radius: 8px; background: #fff; color: #5d58e8; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }
+.inline-workspace-toggle:hover { background: #f7f7ff; border-color: #cfd0f7; }
+.inline-workspace-content { padding: 4px 0 2px; }
+.inline-workspace-content > form { padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.inline-workspace-content > form .field-row { gap: 10px; }
+.inline-workspace-content > form .field-label { font-size: 11px; }
+.inline-workspace-content > form .form-foot { margin-top: 2px; }
+.inline-workspace-content > form .form-foot .btn-primary { display: none; }
+.inline-workspace-content > form .error-banner { margin-top: 4px; }
+.inline-workspace-content > form .section-title { display: none; }
 .composer-tool { display: inline-flex; align-items: center; gap: 5px; padding: 8px 10px; border: 1px solid #edf0f5; border-radius: 9px; background: #fafbfe; color: #8c8f9a; cursor: pointer; font: inherit; font-size: 12px; }
 .composer-tool:hover { border-color: #cfd0f7; color: var(--accent); background: #f7f7ff; }
 .studio-composer textarea { display: block; min-height: 78px; margin: 5px 0 9px; padding: 10px 2px; border: 0; box-shadow: none; resize: vertical; font-size: 15px; background: transparent; }
