@@ -1535,3 +1535,111 @@ api('/api/v1/providers').then(({ providers }) => {
 }).catch(() => {});
 syncStudioComposer();
 refreshStudioGallery();
+
+
+/* =============================== DEV LABS ================================= */
+const labsApi = '/api/v1/labs';
+let labsConfig = { personas: [], skills: [] };
+let activeLabWorkflow = null;
+
+function labOutputText(value) {
+  return esc(String(value || '')).replace(/\n/g, '<br>');
+}
+function renderLabSteps(workflow) {
+  const host = $('#labs-workflow-steps');
+  if (!host) return;
+  if (!workflow?.steps?.length) { host.className = 'lab-steps empty-note'; host.textContent = 'Your workflow stages will appear here.'; return; }
+  host.className = 'lab-steps';
+  host.innerHTML = workflow.steps.map((step) => `<div class="lab-step ${esc(step.status)}"><span class="lab-step-index">${Number(step.step_index) + 1}</span><div><strong>${esc(step.name)}</strong><small>${esc(step.status.replaceAll('-', ' '))}</small>${step.output ? `<p>${labOutputText(step.output)}</p>` : ''}${step.error ? `<p class="error-text">${esc(step.error)}</p>` : ''}</div></div>`).join('');
+}
+async function loadLabsConfig() {
+  try {
+    labsConfig = await api(`${labsApi}/config`);
+    const persona = $('#labs-persona');
+    if (persona) {
+      persona.innerHTML = (labsConfig.personas || []).map((item) => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
+      persona.dispatchEvent(new Event('change'));
+    }
+  } catch { /* Dev Labs remains usable if optional config cannot load. */ }
+}
+async function loadLabUsage() {
+  try {
+    const { usage, credits } = await api(`${labsApi}/usage`);
+    $('#labs-usage-balance').textContent = `${Number(credits?.balance || 0).toFixed(2)} credits`;
+    $('#labs-usage-detail').textContent = `${usage?.events || 0} calls · ${usage?.input_tokens || 0} input / ${usage?.output_tokens || 0} output tokens · estimated cost $${Number(usage?.estimated_cost || 0).toFixed(4)}`;
+  } catch { /* non-critical */ }
+}
+async function loadLabMemory() {
+  try {
+    const { memories } = await api(`${labsApi}/memory`);
+    const host = $('#labs-memory-list');
+    if (host) host.innerHTML = memories?.length ? memories.map((memory) => `<div class="lab-list-item"><span>${labOutputText(memory.content)}</span><button type="button" class="icon-btn lab-memory-delete" data-id="${esc(memory.id)}">Delete</button></div>`).join('') : '<span class="hint">No saved memories yet.</span>';
+  } catch { /* non-critical */ }
+}
+async function loadLabDocuments() {
+  try {
+    const { documents } = await api(`${labsApi}/rag/documents`);
+    const host = $('#labs-rag-documents');
+    if (host) host.innerHTML = documents?.length ? documents.map((doc) => `<div class="lab-list-item"><span><strong>${esc(doc.name)}</strong><small>${Number(doc.chunks || 0)} chunks</small></span><button type="button" class="icon-btn lab-document-delete" data-id="${esc(doc.id)}">Delete</button></div>`).join('') : '<span class="hint">No indexed documents yet.</span>';
+  } catch { /* non-critical */ }
+}
+$('#labs-persona')?.addEventListener('change', () => {
+  const selected = labsConfig.personas?.find((item) => item.id === $('#labs-persona').value);
+  $('#labs-persona-system').textContent = selected?.system || '';
+});
+$('#labs-compare-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = $('#labs-compare-status');
+  const host = $('#labs-compare-results');
+  const models = [1, 2, 3].map((index) => ({ provider: $(`#labs-compare-provider-${index}`)?.value, model: $(`#labs-compare-model-${index}`)?.value.trim() })).filter((item) => item.model);
+  if (!models.length) { status.textContent = 'Enter at least one model ID.'; return; }
+  status.textContent = 'Comparing…'; host.replaceChildren();
+  try {
+    const result = await api(`${labsApi}/compare`, { method: 'POST', body: { prompt: $('#labs-compare-prompt').value.trim(), models } });
+    host.innerHTML = result.results.map((item) => `<article class="lab-result-card"><div><strong>${esc(item.provider_name)}</strong><small>${esc(item.model)} · ${Number(item.latency_ms || 0)} ms</small></div><p>${item.error ? `<span class="error-text">${esc(item.error)}</span>` : labOutputText(item.text)}</p></article>`).join('');
+    status.textContent = 'Comparison complete.'; loadLabUsage();
+  } catch (err) { status.textContent = err.message; }
+});
+$('#labs-rag-upload-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const file = $('#labs-rag-file')?.files?.[0]; const status = $('#labs-rag-upload-status');
+  if (!file) { status.textContent = 'Choose a document first.'; return; }
+  const form = new FormData(); form.append('document', file); status.textContent = 'Indexing locally…';
+  try { await uploadApi(`${labsApi}/rag/upload`, form); status.textContent = 'Document indexed locally.'; $('#labs-rag-file').value = ''; loadLabDocuments(); } catch (err) { status.textContent = err.message; }
+});
+$('#labs-rag-documents')?.addEventListener('click', async (event) => {
+  const button = event.target.closest('.lab-document-delete'); if (!button) return;
+  try { await api(`${labsApi}/rag/documents/${encodeURIComponent(button.dataset.id)}`, { method: 'DELETE' }); loadLabDocuments(); } catch (err) { $('#labs-rag-upload-status').textContent = err.message; }
+});
+$('#labs-rag-query-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = $('#labs-rag-status'); const answer = $('#labs-rag-answer'); status.textContent = 'Searching indexed context…';
+  try { const result = await api(`${labsApi}/rag/query`, { method: 'POST', body: { question: $('#labs-rag-question').value.trim(), provider: $('#labs-rag-provider').value, model: $('#labs-rag-model').value.trim() } }); answer.className = 'lab-output'; answer.innerHTML = `<strong>${esc(result.model)}</strong><p>${labOutputText(result.answer)}</p><small>${result.sources?.length || 0} retrieved source chunks</small>`; status.textContent = 'Answer ready.'; loadLabUsage(); } catch (err) { status.textContent = err.message; }
+});
+$('#labs-workflow-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault(); const status = $('#labs-workflow-status'); status.textContent = 'Planning chain…';
+  try { activeLabWorkflow = await api(`${labsApi}/workflows/plan`, { method: 'POST', body: { goal: $('#labs-workflow-goal').value.trim(), provider: $('#labs-workflow-provider').value, model: $('#labs-workflow-model').value.trim() } }); renderLabSteps(activeLabWorkflow); $('#labs-workflow-run').disabled = false; status.textContent = 'Chain planned. Review the stages, then run planning steps.'; } catch (err) { status.textContent = err.message; }
+});
+$('#labs-workflow-run')?.addEventListener('click', async () => {
+  if (!activeLabWorkflow?.id) return; const status = $('#labs-workflow-status'); status.textContent = 'Running planning steps…'; $('#labs-workflow-run').disabled = true;
+  try { activeLabWorkflow = await api(`${labsApi}/workflows/${encodeURIComponent(activeLabWorkflow.id)}/run`, { method: 'POST' }); renderLabSteps(activeLabWorkflow); status.textContent = 'Planning steps complete. Media stages are ready for the next Dev iteration.'; loadLabUsage(); } catch (err) { status.textContent = err.message; $('#labs-workflow-run').disabled = false; }
+});
+$('#labs-dub-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault(); const video = $('#labs-dub-video')?.files?.[0]; const audio = $('#labs-dub-audio')?.files?.[0]; const status = $('#labs-dub-status');
+  if (!video || !audio) { status.textContent = 'Choose both source video and generated audio.'; return; }
+  const form = new FormData(); form.append('video', video); form.append('audio', audio); form.append('mode', $('#labs-dub-mode').value); form.append('rights_confirmed', $('#labs-dub-rights').checked ? 'true' : 'false'); status.textContent = 'Processing locally…';
+  try { const result = await uploadApi(`${labsApi}/dubbing`, form); status.textContent = 'Dubbed video created.'; const link = $('#labs-dub-output'); link.href = result.file_url; link.hidden = false; link.textContent = 'Download dubbed video'; } catch (err) { status.textContent = err.message; }
+});
+$('#labs-memory-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault(); const status = $('#labs-memory-status'); status.textContent = 'Saving…';
+  try { await api(`${labsApi}/memory`, { method: 'POST', body: { content: $('#labs-memory-content').value.trim(), tags: [$('#labs-persona').value] } }); $('#labs-memory-content').value = ''; status.textContent = 'Memory saved locally.'; loadLabMemory(); } catch (err) { status.textContent = err.message; }
+});
+$('#labs-memory-list')?.addEventListener('click', async (event) => {
+  const button = event.target.closest('.lab-memory-delete'); if (!button) return;
+  try { await api(`${labsApi}/memory/${encodeURIComponent(button.dataset.id)}`, { method: 'DELETE' }); loadLabMemory(); } catch (err) { $('#labs-memory-status').textContent = err.message; }
+});
+$('#labs-credit-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault(); const status = $('#labs-credit-status');
+  try { await api(`${labsApi}/credits`, { method: 'POST', body: { amount: Number($('#labs-credit-amount').value), reason: $('#labs-credit-reason').value.trim() } }); status.textContent = 'Local test credits added.'; loadLabUsage(); } catch (err) { status.textContent = err.message; }
+});
+loadLabsConfig(); loadLabUsage(); loadLabMemory(); loadLabDocuments();

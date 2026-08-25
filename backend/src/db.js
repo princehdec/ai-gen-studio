@@ -52,6 +52,65 @@ db.exec(`
     updated_at  TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_ugc_assets_type ON ugc_assets(type, updated_at DESC);
+  CREATE TABLE IF NOT EXISTS lab_documents (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    mime_type   TEXT NOT NULL,
+    file_size   INTEGER NOT NULL,
+    created_at  TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS lab_chunks (
+    id          TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    content     TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_chunks_doc ON lab_chunks(document_id, chunk_index);
+  CREATE TABLE IF NOT EXISTS workflow_runs (
+    id          TEXT PRIMARY KEY,
+    goal        TEXT NOT NULL,
+    provider    TEXT,
+    model       TEXT,
+    status      TEXT NOT NULL DEFAULT 'draft',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS workflow_steps (
+    id          TEXT PRIMARY KEY,
+    run_id      TEXT NOT NULL,
+    step_index  INTEGER NOT NULL,
+    name        TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    output     TEXT,
+    error       TEXT,
+    updated_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_workflow_steps_run ON workflow_steps(run_id, step_index);
+  CREATE TABLE IF NOT EXISTS usage_events (
+    id          TEXT PRIMARY KEY,
+    provider    TEXT NOT NULL,
+    model       TEXT,
+    operation   TEXT NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    estimated_cost REAL,
+    created_at  TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS credit_ledger (
+    id          TEXT PRIMARY KEY,
+    amount      REAL NOT NULL,
+    reason      TEXT NOT NULL,
+    reference   TEXT,
+    created_at  TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS memories (
+    id          TEXT PRIMARY KEY,
+    content     TEXT NOT NULL,
+    tags        TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
 `);
 
 const COLS = [

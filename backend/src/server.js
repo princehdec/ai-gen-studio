@@ -9,6 +9,7 @@ import { providers } from './routes/providers.js';
 import { chat } from './routes/chat.js';
 import { enhance } from './routes/enhance.js';
 import { ugc } from './routes/ugc.js';
+import { labs } from './routes/labs.js';
 import { HttpError } from './util.js';
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api/v1/providers', providers);
 app.use('/api/v1/chat', chat);
 app.use('/api/v1/enhance', enhance);
 app.use('/api/v1/ugc', ugc);
+app.use('/api/v1/labs', labs);
 
 app.use('/api/v1/videos', videos);
 app.use('/api/v1/images', images);
