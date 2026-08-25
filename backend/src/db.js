@@ -40,6 +40,18 @@ db.exec(`
     updated_at  TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_ugc_updated ON ugc_projects(updated_at DESC);
+  CREATE TABLE IF NOT EXISTS ugc_assets (
+    id          TEXT PRIMARY KEY,
+    type        TEXT NOT NULL CHECK (type IN ('character','product')),
+    name        TEXT NOT NULL,
+    description TEXT,
+    file_path   TEXT NOT NULL,
+    mime_type   TEXT NOT NULL,
+    file_size   INTEGER NOT NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_ugc_assets_type ON ugc_assets(type, updated_at DESC);
 `);
 
 const COLS = [

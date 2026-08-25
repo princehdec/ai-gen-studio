@@ -38,7 +38,7 @@ Models are dropdowns fed live from OpenRouter (`/videos/models`, `/images/models
 
 The desktop app includes a guided UGC Ad Studio workflow. Enter a product, target audience, campaign goal, offer, platform, tone, and language to create three ad angles. Select an angle to generate an editable script and scene plan, review the visual prompts and voiceover, then produce scene clips with a configured OpenRouter text-to-video model. The app can generate a matching voiceover and assemble completed scene videos into one local MP4 with FFmpeg. Projects, angles, scripts, and scene prompts are saved in the local SQLite database; generated media remains in the local Library.
 
-The first UGC workflow is intentionally guided rather than fully autonomous: review claims, scripts, and scenes before spending provider credits. Scene generation currently uses text-to-video clips, and the export uses the platform’s recommended aspect ratio. Captions are reserved for a later export pass.
+The first UGC workflow is intentionally guided rather than fully autonomous: review claims, scripts, and scenes before spending provider credits. The Reference library lets you save authorized Character and Product PNG/JPEG/WebP images locally, then select one of each for scene generation. When references are selected, the app sends them as OpenRouter reference-to-video inputs; without references it uses text-to-video. The export uses the platform’s recommended aspect ratio. Captions are reserved for a later export pass. Reference images are only accepted with an ownership/authorization confirmation.
 
 ## API quick reference
 

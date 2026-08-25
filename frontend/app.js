@@ -101,7 +101,7 @@ const rememberedFields = [
   'v-provider', 'v-model', 'v-duration', 'v-resolution', 'v-aspect', 'v-audio', 'v-batch-count',
   'i-provider', 'i-model', 'i-aspect', 'i-count', 'i-format', 'i-batch-count',
   'a-provider', 'a-model', 'a-voice', 'a-format', 'a-text', 'a-preview-text', 'a-voice-reference-transcript', 'a-batch-count',
-  'ugc-product', 'ugc-audience', 'ugc-goal', 'ugc-offer', 'ugc-platform', 'ugc-duration', 'ugc-tone', 'ugc-language', 'ugc-planner-provider', 'ugc-planner-model', 'ugc-video-model', 'ugc-scene-batch', 'ugc-voiceover',
+  'ugc-product', 'ugc-audience', 'ugc-goal', 'ugc-offer', 'ugc-platform', 'ugc-duration', 'ugc-tone', 'ugc-language', 'ugc-planner-provider', 'ugc-planner-model', 'ugc-video-model', 'ugc-scene-batch', 'ugc-character-asset', 'ugc-product-asset', 'ugc-voiceover',
   'c-provider', 'c-model', 'c-system', 'c-temperature', 'c-max-tokens',
   'e-method', 'e-scale', 'h-search',
 ];
@@ -1132,8 +1132,8 @@ $('#ugc-new')?.addEventListener('click', () => {
   ugcSetStatus('');
 });
 
-async function ugcGenerateScene(scene, index, videoModel, aspect) {
-  const generated = await api('/api/v1/videos', { method: 'POST', body: { provider: 'openrouter', model: videoModel || undefined, prompt: scene.visual_prompt, mode: 't2v', duration: Math.max(4, Math.min(15, Number(scene.duration) || 4)), resolution: '720p', aspect_ratio: aspect, generate_audio: false } });
+async function ugcGenerateScene(scene, index, videoModel, aspect, referenceDataUrls = []) {
+  const generated = await api('/api/v1/videos', { method: 'POST', body: { provider: 'openrouter', model: videoModel || undefined, prompt: scene.visual_prompt, mode: referenceDataUrls.length ? 'reference' : 't2v', references: referenceDataUrls.length ? referenceDataUrls : undefined, duration: Math.max(4, Math.min(15, Number(scene.duration) || 4)), resolution: '720p', aspect_ratio: aspect, generate_audio: false } });
   const finished = await waitForVideoTerminal(generated);
   if (finished.status !== 'completed') throw new Error(`Scene ${index + 1} failed: ${finished.error || 'video generation failed'}`);
   return finished;
@@ -1167,10 +1167,13 @@ $('#ugc-produce')?.addEventListener('click', async () => {
     const aspect = UGC_PLATFORM_ASPECTS[brief.platform] || '9:16';
     const videoModel = $('#ugc-video-model').value.trim() || $('#v-model').value.trim();
     const concurrency = Number($('#ugc-scene-batch').value) || 1;
-    ugcSetStatus(`Generating ${scenes.length} scene clips…`);
+    const selectedAssetIds = ['#ugc-character-asset', '#ugc-product-asset'].map((selector) => $(selector)?.value).filter(Boolean);
+    const selectedAssets = selectedAssetIds.map((id) => ugcAssets.find((asset) => asset.id === id)).filter(Boolean);
+    const referenceDataUrls = await Promise.all(selectedAssets.map(async (asset) => blobToDataUrl(await fetch(asset.file_url).then((response) => { if (!response.ok) throw new Error(`Could not load ${asset.name}.`); return response.blob(); }))));
+    ugcSetStatus(`Generating ${scenes.length} scene clips${selectedAssets.length ? ` with ${selectedAssets.length} reference${selectedAssets.length > 1 ? 's' : ''}` : ''}…`);
     ugcState.sceneGenerations = await ugcRunPool(scenes, concurrency, async (scene, index) => {
       ugcSetStatus(`Generating scene ${index + 1} of ${scenes.length}…`);
-      return ugcGenerateScene(scene, index, videoModel, aspect);
+      return ugcGenerateScene(scene, index, videoModel, aspect, referenceDataUrls);
     });
     if ($('#ugc-voiceover').checked) {
       ugcSetStatus('Generating matching voiceover…');
@@ -1207,4 +1210,60 @@ $('#ugc-export')?.addEventListener('click', async () => {
   finally { busy(button, false); }
 });
 
+let ugcAssets = [];
+
+async function loadUgcAssets() {
+  try {
+    const { assets } = await api('/api/v1/ugc/assets');
+    ugcAssets = assets || [];
+    for (const [type, selector] of [['character', '#ugc-character-asset'], ['product', '#ugc-product-asset']]) {
+      const select = $(selector);
+      if (!select) continue;
+      const previous = select.value;
+      select.innerHTML = `<option value="">None</option>${ugcAssets.filter((asset) => asset.type === type).map((asset) => `<option value="${esc(asset.id)}">${esc(asset.name)}</option>`).join('')}`;
+      if (ugcAssets.some((asset) => asset.id === previous)) select.value = previous;
+    }
+    const host = $('#ugc-assets-list');
+    if (!host) return;
+    host.replaceChildren();
+    ugcAssets.forEach((asset) => {
+      const row = document.createElement('div');
+      row.className = 'ugc-asset-item';
+      row.innerHTML = `<img src="${esc(asset.file_url)}" alt="${esc(asset.name)}"><div><strong>${esc(asset.name)}</strong><small>${esc(asset.type)}${asset.description ? ` · ${esc(asset.description)}` : ''}</small></div><button type="button" class="icon-btn">Delete</button>`;
+      row.querySelector('button').addEventListener('click', async () => {
+        try { await api(`/api/v1/ugc/assets/${encodeURIComponent(asset.id)}`, { method: 'DELETE' }); await loadUgcAssets(); } catch (err) { $('#ugc-asset-status').textContent = err.message; }
+      });
+      host.appendChild(row);
+    });
+  } catch (err) { console.warn('[ugc] assets unavailable:', err.message); }
+}
+
+$('#ugc-asset-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = $('#ugc-asset-status');
+  const button = $('#ugc-asset-upload');
+  const file = $('#ugc-asset-file').files[0];
+  if (!file) { status.textContent = 'Choose a PNG, JPEG or WebP reference image first.'; return; }
+  if (!$('#ugc-asset-rights').checked) { status.textContent = 'Confirm that you own or are authorized to use this image.'; return; }
+  button.disabled = true;
+  status.textContent = 'Saving locally…';
+  try {
+    const form = new FormData();
+    form.append('type', $('#ugc-asset-type').value);
+    form.append('name', $('#ugc-asset-name').value.trim());
+    form.append('description', $('#ugc-asset-description').value.trim());
+    form.append('rights_confirmed', 'true');
+    form.append('asset', file);
+    await uploadApi('/api/v1/ugc/assets', form);
+    $('#ugc-asset-name').value = '';
+    $('#ugc-asset-description').value = '';
+    $('#ugc-asset-file').value = '';
+    $('#ugc-asset-rights').checked = false;
+    status.textContent = 'Reference saved locally.';
+    await loadUgcAssets();
+  } catch (err) { status.textContent = err.message; }
+  finally { button.disabled = false; }
+});
+
+loadUgcAssets();
 loadUgcProjects();

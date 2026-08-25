@@ -1,4 +1,8 @@
 import { Router } from 'express';
+import multer from 'multer';
+import fs from 'node:fs';
+import { unlink } from 'node:fs/promises';
+import { extForMime } from '../util.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -13,6 +17,11 @@ import { getGeneration, insertGeneration, updateGeneration } from '../db.js';
 
 export const ugc = Router();
 
+const assetUploadRoot = path.join(config.storageDir, '.ugc-asset-inputs');
+fs.mkdirSync(assetUploadRoot, { recursive: true });
+const assetUpload = multer({ dest: assetUploadRoot, limits: { fileSize: 15 * 1024 * 1024, files: 1 } });
+const ASSET_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
 const PLATFORM_LIMITS = {
   tiktok: { label: 'TikTok', aspect_ratio: '9:16', maxSeconds: 60 },
   instagram_reels: { label: 'Instagram Reels', aspect_ratio: '9:16', maxSeconds: 90 },
@@ -20,6 +29,10 @@ const PLATFORM_LIMITS = {
   instagram_feed: { label: 'Instagram Feed', aspect_ratio: '4:5', maxSeconds: 60 },
   youtube: { label: 'YouTube', aspect_ratio: '16:9', maxSeconds: 180 },
 };
+
+function assetRow(row) {
+  return row ? { id: row.id, type: row.type, name: row.name, description: row.description || '', file_url: `/files/${row.file_path}`, mime_type: row.mime_type, file_size: row.file_size, created_at: row.created_at, updated_at: row.updated_at } : null;
+}
 
 function projectRow(row) {
   if (!row) return null;
@@ -115,6 +128,57 @@ async function askPlanner({ provider = 'openrouter', model, system, prompt }) {
   if (!text) throw new HttpError(502, `${providerConfig.name} returned no planning text.`);
   return { text, model: payload?.model || selectedModel, provider: providerConfig.id };
 }
+
+ugc.get('/assets', (req, res, next) => {
+  try {
+    const type = String(req.query.type || '').trim();
+    if (type && !['character', 'product'].includes(type)) throw badRequest('Asset type must be character or product.');
+    const rows = db.prepare(`SELECT * FROM ugc_assets ${type ? 'WHERE type = ?' : ''} ORDER BY updated_at DESC`).all(...(type ? [type] : []));
+    res.json({ assets: rows.map(assetRow) });
+  } catch (err) { next(err); }
+});
+
+function uploadAsset(req, res, next) {
+  assetUpload.single('asset')(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') return next(badRequest('Reference image must be 15 MB or smaller.'));
+    return next(badRequest('Could not read the reference image upload.'));
+  });
+}
+
+ugc.post('/assets', uploadAsset, async (req, res, next) => {
+  try {
+    const type = String(req.body?.type || '').trim();
+    const name = cleanText(req.body?.name, 120);
+    const description = cleanText(req.body?.description, 500);
+    if (!['character', 'product'].includes(type)) throw badRequest('Asset type must be character or product.');
+    if (!name) throw badRequest('Give the reference asset a name.');
+    if (String(req.body?.rights_confirmed).toLowerCase() !== 'true') throw badRequest('Confirm that you own or are authorized to use this reference image.');
+    if (!req.file) throw badRequest('Choose a PNG, JPEG or WebP reference image.');
+    if (!ASSET_MIMES.has(req.file.mimetype)) throw badRequest('Reference assets must be PNG, JPEG or WebP images.');
+    const buffer = await readFile(req.file.path);
+    const rel = storage.newRel(extForMime(req.file.mimetype, 'bin'));
+    const size = await storage.saveBuffer(buffer, rel);
+    await unlink(req.file.path).catch(() => {});
+    const id = randomUUID();
+    const now = nowISO();
+    db.prepare('INSERT INTO ugc_assets (id, type, name, description, file_path, mime_type, file_size, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, type, name, description, rel, req.file.mimetype, size, now, now);
+    res.status(201).json({ asset: assetRow(db.prepare('SELECT * FROM ugc_assets WHERE id = ?').get(id)) });
+  } catch (err) {
+    if (req.file?.path) await unlink(req.file.path).catch(() => {});
+    next(err);
+  }
+});
+
+ugc.delete('/assets/:id', async (req, res, next) => {
+  try {
+    const row = db.prepare('SELECT * FROM ugc_assets WHERE id = ?').get(req.params.id);
+    if (!row) throw new HttpError(404, 'Reference asset not found.');
+    await storage.remove(row.file_path);
+    db.prepare('DELETE FROM ugc_assets WHERE id = ?').run(req.params.id);
+    res.status(204).end();
+  } catch (err) { next(err); }
+});
 
 ugc.post('/plan', async (req, res, next) => {
   try {
