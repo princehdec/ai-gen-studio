@@ -781,9 +781,6 @@ async function loadHistory(reset) {
 
   $('#h-empty').hidden = total !== 0;
   $('#h-more').hidden = hState.offset + items.length >= total;
-  const pill = $('#history-count');
-  pill.hidden = false;
-  pill.textContent = total;
 }
 
 function refreshHistoryCount() {
