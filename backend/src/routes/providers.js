@@ -34,7 +34,7 @@ providers.post('/:id/test', async (req, res, next) => {
     if (!saved) throw new HttpError(400, `Unknown provider "${req.params.id}".`);
     const enteredKey = String(req.body?.apiKey || '').trim();
     const apiKey = enteredKey || saved.apiKey;
-    if (!apiKey) throw new HttpError(401, `${saved.name} API key is not configured. Enter a key, or save one first.`);
+    if (saved.requiresApiKey && !apiKey) throw new HttpError(401, `${saved.name} API key is not configured. Enter a key, or save one first.`);
 
     const provider = { ...saved, apiKey, configured: true };
     const models = await listOpenAIModels(provider);
@@ -43,6 +43,7 @@ providers.post('/:id/test', async (req, res, next) => {
       provider: provider.id,
       model_count: models.length,
       saved: Boolean(saved.apiKey),
+      local: saved.requiresApiKey === false,
     });
   } catch (err) {
     next(err);

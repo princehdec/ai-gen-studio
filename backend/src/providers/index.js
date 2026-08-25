@@ -9,9 +9,7 @@ export function requireProvider(id, capability) {
   if (!provider.capabilities.includes(capability)) {
     throw new HttpError(400, `${provider.name} does not support ${capability} generation in this app yet.`);
   }
-  if (!provider.apiKey) {
-    throw new HttpError(401, `${provider.name} API key is not configured. Open Settings to add it.`);
-  }
+  if (provider.requiresApiKey && !provider.apiKey) throw new HttpError(401, `${provider.name} API key is not configured. Open Settings to add it.`);
   return provider;
 }
 
@@ -25,7 +23,7 @@ export async function providerFetch(provider, pathname, { method = 'GET', json, 
     response = await fetch(providerPath(provider, pathname), {
       method,
       headers: {
-        Authorization: `Bearer ${provider.apiKey}`,
+        ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
         'Content-Type': 'application/json',
         ...headers,
       },
@@ -89,7 +87,7 @@ export async function providerFetchUrl(provider, url, { method = 'GET', json, ti
     response = await fetch(url, {
       method,
       headers: {
-        Authorization: `Bearer ${provider.apiKey}`,
+        ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
         'Content-Type': 'application/json',
         ...headers,
       },
@@ -119,7 +117,7 @@ export async function createOpenAIChat(provider, body, { timeoutMs = 180000 } = 
   const response = await fetch(providerPath(provider, '/chat/completions'), {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${provider.apiKey}`,
+      ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
       'Content-Type': 'application/json',
       Accept: body.stream ? 'text/event-stream' : 'application/json',
     },

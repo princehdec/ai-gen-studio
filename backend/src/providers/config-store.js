@@ -62,6 +62,15 @@ const PROVIDER_DEFAULTS = {
     defaultModel: 'deepseek-v4-flash',
     staticModels: [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }, { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }],
   },
+  ollama: {
+    name: 'Ollama (Local)',
+    baseUrl: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/v1',
+    apiKeyEnv: '',
+    requiresApiKey: false,
+    capabilities: ['chat'],
+    defaultModel: process.env.OLLAMA_DEFAULT_MODEL || 'gemma4:e4b',
+    staticModels: [{ id: 'gemma4:e4b', name: 'Gemma 4 E4B (local)' }],
+  },
 };
 
 function readStored() {
@@ -101,10 +110,11 @@ export function getProvider(id) {
       ? normalizeBaseUrl(stored.taskBaseUrl || defaults.taskBaseUrl, defaults.taskBaseUrl)
       : null,
     apiKey: String(stored.apiKey || envKey || '').trim(),
+    requiresApiKey: defaults.requiresApiKey !== false,
     capabilities: [...defaults.capabilities],
     defaultModel: defaults.defaultModel || '',
     staticModels: defaults.staticModels || [],
-    configured: Boolean(stored.apiKey || envKey),
+    configured: defaults.requiresApiKey === false ? true : Boolean(stored.apiKey || envKey),
   };
 }
 
@@ -117,6 +127,7 @@ export function listProviders() {
       baseUrl: p.baseUrl,
       capabilities: p.capabilities,
       configured: p.configured,
+      requiresApiKey: p.requiresApiKey,
       keyHint: p.apiKey ? `${p.apiKey.slice(0, 4)}••••${p.apiKey.slice(-4)}` : null,
     };
   });

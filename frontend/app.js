@@ -856,10 +856,13 @@ function renderProviderSettings() {
     const card = document.createElement('section');
     card.className = 'provider-card';
     card.dataset.provider = provider.id;
+    const keyField = provider.requiresApiKey === false
+      ? '<p class="field-help local-provider-note">Local runtime · no API key required</p>'
+      : `<label class="field"><span class="field-label">API key <small>(blank keeps the saved key)</small></span><span class="saved-key-state">${provider.configured ? `Saved key: ${esc(provider.keyHint || '••••••••')}` : 'No key saved yet'}</span><input class="provider-api-key" type="password" placeholder="${provider.configured ? 'Click to replace saved key' : 'Click to enter API key'}" autocomplete="new-password" readonly /></label>`;
     card.innerHTML = `
-      <div class="provider-card-head"><div><h3>${esc(provider.name)}</h3><p>${provider.capabilities.map(esc).join(' · ')}</p></div><span class="provider-state ${provider.configured ? 'configured' : ''}">${provider.configured ? 'Connected' : 'Not configured'}</span></div>
+      <div class="provider-card-head"><div><h3>${esc(provider.name)}</h3><p>${provider.capabilities.map(esc).join(' · ')}</p></div><span class="provider-state ${provider.configured ? 'configured' : ''}">${provider.configured ? 'Available' : 'Not configured'}</span></div>
       <label class="field"><span class="field-label">Base URL</span><input class="provider-base-url" type="url" value="${esc(provider.baseUrl)}" /></label>
-      <label class="field"><span class="field-label">API key <small>(blank keeps the saved key)</small></span><span class="saved-key-state">${provider.configured ? `Saved key: ${esc(provider.keyHint || '••••••••')}` : 'No key saved yet'}</span><input class="provider-api-key" type="password" placeholder="${provider.configured ? 'Click to replace saved key' : 'Click to enter API key'}" autocomplete="new-password" readonly /></label>
+      ${keyField}
       <div class="provider-card-actions"><button type="button" class="btn btn-ghost provider-test" data-provider="${esc(provider.id)}">Test connection</button><span class="hint provider-test-status" aria-live="polite"></span></div>`;
     settingsContainer.appendChild(card);
   }
@@ -898,10 +901,12 @@ settingsContainer?.addEventListener('click', async (e) => {
       method: 'POST',
       body: { apiKey: enteredKey },
     });
-    status.textContent = result.saved
-      ? `Connected · ${result.model_count ?? 0} models found`
-      : `Connected with entered key · click Save settings to keep it`;
-    card.querySelector('.provider-state').textContent = result.saved ? 'Connected' : 'Connection OK (unsaved)';
+    status.textContent = result.local
+      ? `Local runtime connected · ${result.model_count ?? 0} models found`
+      : result.saved
+        ? `Connected · ${result.model_count ?? 0} models found`
+        : `Connected with entered key · click Save settings to keep it`;
+    card.querySelector('.provider-state').textContent = result.local ? 'Available' : result.saved ? 'Connected' : 'Connection OK (unsaved)';
   } catch (err) {
     status.textContent = err.message;
   } finally {

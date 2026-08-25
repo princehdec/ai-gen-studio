@@ -1,7 +1,7 @@
 {
-  "name": "ai-gen-studio",
-  "version": "1.1.17",
-  "description": "Local-first multi-provider AI generation desktop studio",
+  "name": "ai-gen-studio-dev",
+  "version": "1.1.17-dev.1",
+  "description": "AI Gen Studio Dev — local-first multi-provider AI generation desktop studio",
   "private": true,
   "repository": {
     "type": "git",
@@ -19,8 +19,8 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.aigenstudio.desktop",
-    "productName": "AI Gen Studio",
+    "appId": "com.aigenstudio.desktop.dev",
+    "productName": "AI Gen Studio Dev",
     "directories": {
       "output": "release"
     },
