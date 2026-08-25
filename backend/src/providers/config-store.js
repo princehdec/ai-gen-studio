@@ -22,6 +22,46 @@ const PROVIDER_DEFAULTS = {
     apiKeyEnv: 'HUGGINGFACE_API_KEY',
     capabilities: ['chat', 'image', 'video'],
   },
+  cerebras: {
+    name: 'Cerebras',
+    baseUrl: process.env.CEREBRAS_BASE_URL || 'https://api.cerebras.ai/v1',
+    apiKeyEnv: 'CEREBRAS_API_KEY',
+    capabilities: ['chat'],
+    defaultModel: 'gpt-oss-120b',
+    staticModels: [{ id: 'gpt-oss-120b', name: 'GPT OSS 120B' }],
+  },
+  mistral: {
+    name: 'Mistral AI',
+    baseUrl: process.env.MISTRAL_BASE_URL || 'https://api.mistral.ai/v1',
+    apiKeyEnv: 'MISTRAL_API_KEY',
+    capabilities: ['chat'],
+    defaultModel: 'mistral-large-latest',
+    staticModels: [{ id: 'mistral-large-latest', name: 'Mistral Large' }],
+  },
+  gemini: {
+    name: 'Google Gemini',
+    baseUrl: process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai',
+    apiKeyEnv: 'GEMINI_API_KEY',
+    capabilities: ['chat'],
+    defaultModel: 'gemini-3.7-flash',
+    staticModels: [{ id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash' }, { id: 'gemini-3.7-pro', name: 'Gemini 3.7 Pro' }],
+  },
+  xai: {
+    name: 'xAI / Grok',
+    baseUrl: process.env.XAI_BASE_URL || 'https://api.x.ai/v1',
+    apiKeyEnv: 'XAI_API_KEY',
+    capabilities: ['chat'],
+    defaultModel: 'grok-4.6',
+    staticModels: [{ id: 'grok-4.6', name: 'Grok 4.6' }],
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
+    apiKeyEnv: 'DEEPSEEK_API_KEY',
+    capabilities: ['chat'],
+    defaultModel: 'deepseek-v4-flash',
+    staticModels: [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }, { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }],
+  },
 };
 
 function readStored() {
@@ -62,6 +102,8 @@ export function getProvider(id) {
       : null,
     apiKey: String(stored.apiKey || envKey || '').trim(),
     capabilities: [...defaults.capabilities],
+    defaultModel: defaults.defaultModel || '',
+    staticModels: defaults.staticModels || [],
     configured: Boolean(stored.apiKey || envKey),
   };
 }

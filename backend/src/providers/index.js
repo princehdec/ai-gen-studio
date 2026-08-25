@@ -54,9 +54,19 @@ export async function providerFetch(provider, pathname, { method = 'GET', json, 
 }
 
 export async function listOpenAIModels(provider) {
-  const { data } = await providerFetch(provider, '/models', { timeoutMs: 30000 });
-  const raw = Array.isArray(data?.data) ? data.data : [];
-  return raw.map((m) => ({ id: m.id || m.name, name: m.name || m.id, capabilities: provider.capabilities }));
+  try {
+    const { data } = await providerFetch(provider, '/models', { timeoutMs: 30000 });
+    const raw = Array.isArray(data?.data) ? data.data : [];
+    if (raw.length) return raw.map((m) => ({ id: m.id || m.name, name: m.name || m.id, capabilities: provider.capabilities }));
+  } catch (err) {
+    const catalogUnsupported = [404, 405, 501].includes(err?.status);
+    if (!provider.staticModels?.length || !catalogUnsupported) throw err;
+  }
+  return (provider.staticModels || []).map((m) => ({
+    id: m.id,
+    name: m.name || m.id,
+    capabilities: provider.capabilities,
+  }));
 }
 
 export async function runHuggingFaceTask(provider, task, model, inputs, parameters = {}) {

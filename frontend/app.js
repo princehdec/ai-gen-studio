@@ -218,6 +218,10 @@ async function loadModels(kind, provider = $(providerByKind[kind])?.value || 'op
         modelInput.dataset.mode = mode;
       }
     }
+    if (kind === 'chat' && default_model) {
+      const modelInput = $('#c-model');
+      if (modelInput && (!modelInput.value || !modelInput.dataset.remembered)) modelInput.value = default_model;
+    }
   } catch (err) {
     const hint = $(`#${kind[0]}-model-hint`);
     if (hint) hint.textContent = `Could not load models — enter an ID manually`;
@@ -241,14 +245,23 @@ api('/api/v1/providers').then(({ providers }) => {
 }).catch(() => {});
 
 function syncProviderOptions() {
-  const map = { video: 'video', image: 'image', audio: 'audio', chat: 'chat' };
-  for (const [kind, capability] of Object.entries(map)) {
-    const select = $(providerByKind[kind]);
+  const map = {
+    video: ['#v-provider', 'video'],
+    image: ['#i-provider', 'image'],
+    audio: ['#a-provider', 'audio'],
+    chat: ['#c-provider', 'chat'],
+    planner: ['#ugc-planner-provider', 'chat'],
+  };
+  for (const [kind, [selector, capability]] of Object.entries(map)) {
+    const select = $(selector);
     if (!select) continue;
     for (const option of select.options) {
       const provider = providerState.find((p) => p.id === option.value);
-      option.disabled = Boolean(provider && !provider.capabilities.includes(capability));
-      option.textContent = provider ? `${provider.name}${provider.configured ? '' : ' (not configured)'}` : option.textContent;
+      const supported = Boolean(provider?.capabilities.includes(capability));
+      option.disabled = Boolean(provider && !supported);
+      option.textContent = provider
+        ? `${provider.name}${supported ? '' : ' (Chat only)'}${provider.configured ? '' : ' (not configured)'}`
+        : option.textContent;
     }
   }
 }

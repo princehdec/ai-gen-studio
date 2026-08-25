@@ -10,7 +10,7 @@ chat.get('/models', async (req, res, next) => {
   try {
     const provider = requireProvider(req.query.provider || 'openrouter', 'chat');
     const models = await listOpenAIModels(provider);
-    res.json({ models, default_model: provider.id === 'openrouter' ? config.defaults.chatModel : '' });
+    res.json({ models, default_model: provider.defaultModel || (provider.id === 'openrouter' ? config.defaults.chatModel : '') });
   } catch (err) { next(err); }
 });
 
@@ -28,7 +28,7 @@ chat.post('/', async (req, res, next) => {
       throw badRequest('A prompt is required.');
     }
     const providerConfig = requireProvider(provider, 'chat');
-    const selectedModel = String(model || (providerConfig.id === 'openrouter' ? config.defaults.chatModel : '')).trim();
+    const selectedModel = String(model || providerConfig.defaultModel || (providerConfig.id === 'openrouter' ? config.defaults.chatModel : '')).trim();
     if (!selectedModel) throw badRequest(`Enter a ${providerConfig.name} model ID.`);
 
     const messages = [];
