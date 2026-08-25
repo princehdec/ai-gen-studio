@@ -1267,3 +1267,149 @@ $('#ugc-asset-form')?.addEventListener('submit', async (event) => {
 
 loadUgcAssets();
 loadUgcProjects();
+
+/* ============================ STUDIO SHELL ================================ */
+const studioPrompt = $('#studio-prompt');
+const studioWorkspace = $('#studio-workspace-select');
+let studioGalleryMode = 'inspiration';
+let studioGalleryRows = [];
+
+function selectStudioTab(tab) {
+  document.querySelector(`.tab[data-tab="${CSS.escape(tab)}"]`)?.click();
+}
+
+function syncStudioComposer() {
+  const tab = studioWorkspace?.value || 'video';
+  if (tab === 'video') {
+    const aspect = $('#v-aspect')?.value || '9:16';
+    const duration = $('#v-duration')?.value || '8';
+    $('#studio-format-chip').textContent = `${aspect} · ${duration}s`;
+    $('#studio-audio-chip').textContent = $('#v-audio')?.checked ? '◉ Audio' : '○ Silent';
+  } else if (tab === 'ugc') {
+    $('#studio-format-chip').textContent = `${UGC_PLATFORM_ASPECTS[$('#ugc-platform')?.value] || '9:16'} · ${$('#ugc-duration')?.value || '25'}s`;
+    $('#studio-audio-chip').textContent = $('#ugc-voiceover')?.checked ? '◉ Voiceover' : '○ Silent';
+  } else if (tab === 'audio') {
+    $('#studio-format-chip').textContent = 'Speech / Music';
+    $('#studio-audio-chip').textContent = '◉ Audio';
+  } else {
+    $('#studio-format-chip').textContent = tab === 'image' ? 'Image' : 'Chat';
+    $('#studio-audio-chip').textContent = 'Workspace';
+  }
+}
+
+studioWorkspace?.addEventListener('change', syncStudioComposer);
+['#v-aspect', '#v-duration', '#v-audio', '#ugc-platform', '#ugc-duration', '#ugc-voiceover'].forEach((selector) => $(selector)?.addEventListener('input', syncStudioComposer));
+['#v-aspect', '#v-duration', '#v-audio', '#ugc-platform', '#ugc-duration', '#ugc-voiceover'].forEach((selector) => $(selector)?.addEventListener('change', syncStudioComposer));
+$('#studio-format-chip')?.addEventListener('click', () => selectStudioTab(studioWorkspace?.value || 'video'));
+$('#studio-audio-chip')?.addEventListener('click', () => selectStudioTab(studioWorkspace?.value || 'video'));
+
+$('#studio-run')?.addEventListener('click', () => {
+  const tab = studioWorkspace?.value || 'video';
+  const targets = { video: '#v-prompt', image: '#i-prompt', audio: '#a-text', chat: '#c-prompt' };
+  if (tab === 'ugc') {
+    selectStudioTab('ugc');
+    if (studioPrompt?.value.trim() && !$('#ugc-product').value.trim()) $('#ugc-product').value = studioPrompt.value.trim().slice(0, 240);
+    $('#ugc-product')?.focus();
+    return;
+  }
+  const target = $(targets[tab]);
+  if (target && studioPrompt?.value.trim()) {
+    target.value = studioPrompt.value.trim();
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  selectStudioTab(tab);
+  target?.focus();
+});
+
+$('#studio-add-reference')?.addEventListener('click', () => {
+  selectStudioTab('ugc');
+  $('#ugc-asset-file')?.focus();
+  $('#ugc-asset-file')?.click();
+});
+$('#studio-open-assets')?.addEventListener('click', () => {
+  selectStudioTab('ugc');
+  $('#ugc-assets')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+$('#studio-open-library')?.addEventListener('click', () => selectStudioTab('history'));
+
+function galleryMediaMarkup(row) {
+  if (row.file_url && row.type === 'image') return `<img loading="lazy" src="${esc(row.file_url)}" alt="${esc(row.prompt || row.name || '')}">`;
+  if (row.file_url && row.type === 'video') return `<video muted preload="metadata" src="${esc(row.file_url)}"></video>`;
+  if (row.file_url && row.type === 'audio') return '<span class="gallery-audio-icon">◉</span>';
+  return '<span>✦</span>';
+}
+
+function renderStudioGallery() {
+  const host = $('#studio-gallery-grid');
+  if (!host) return;
+  const query = ($('#studio-gallery-search')?.value || '').trim().toLowerCase();
+  const rows = studioGalleryRows.filter((row) => !query || `${row.name || ''} ${row.prompt || ''} ${row.type || ''} ${row.description || ''}`.toLowerCase().includes(query));
+  host.replaceChildren();
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'gallery-empty';
+    empty.textContent = studioGalleryMode === 'assets' ? 'No saved Character or Product references yet.' : 'Generate something and it will appear here.';
+    host.appendChild(empty);
+    return;
+  }
+  rows.slice(0, 12).forEach((row) => {
+    const card = document.createElement('article');
+    card.className = 'gallery-card';
+    const title = row.name || row.prompt || 'Untitled asset';
+    const type = row.type || 'asset';
+    card.innerHTML = `<div class="gallery-thumb${type === 'audio' ? ' audio' : ''}${studioGalleryMode === 'assets' ? ' gallery-asset-thumb' : ''}">${galleryMediaMarkup(row)}${studioGalleryMode === 'assets' ? `<span class="gallery-asset-type">${esc(type)}</span>` : ''}</div><div class="gallery-card-body"><strong title="${esc(title)}">${esc(title)}</strong><small class="gallery-type">${esc(type)}${row.model ? ` · ${esc(row.model)}` : ''}</small><small>${esc(row.description || row.created_at ? (row.description || fmtDate(row.created_at)) : '')}</small></div>`;
+    card.addEventListener('click', () => {
+      if (studioGalleryMode === 'assets') {
+        selectStudioTab('ugc');
+        const selector = row.type === 'character' ? '#ugc-character-asset' : '#ugc-product-asset';
+        if ($(selector)) { $(selector).value = row.id; $(selector).dispatchEvent(new Event('change', { bubbles: true })); }
+      } else {
+        studioPrompt.value = row.prompt || '';
+        studioPrompt.dispatchEvent(new Event('input', { bubbles: true }));
+        const tab = row.type === 'video' || row.type === 'image' || row.type === 'audio' ? row.type : 'video';
+        if (studioWorkspace) studioWorkspace.value = tab;
+        syncStudioComposer();
+        selectStudioTab(tab);
+      }
+    });
+    host.appendChild(card);
+  });
+}
+
+async function refreshStudioGallery() {
+  const host = $('#studio-gallery-grid');
+  if (!host) return;
+  try {
+    if (studioGalleryMode === 'assets') {
+      const { assets } = await api('/api/v1/ugc/assets');
+      studioGalleryRows = assets || [];
+    } else {
+      const { items } = await api('/api/v1/generations?limit=12&offset=0');
+      studioGalleryRows = items || [];
+    }
+    renderStudioGallery();
+  } catch (err) {
+    host.innerHTML = `<div class="gallery-empty">Gallery unavailable right now.</div>`;
+  }
+}
+
+$('#gallery-inspiration')?.addEventListener('click', () => {
+  studioGalleryMode = 'inspiration';
+  $('#gallery-inspiration').classList.add('active');
+  $('#gallery-assets').classList.remove('active');
+  refreshStudioGallery();
+});
+$('#gallery-assets')?.addEventListener('click', () => {
+  studioGalleryMode = 'assets';
+  $('#gallery-assets').classList.add('active');
+  $('#gallery-inspiration').classList.remove('active');
+  refreshStudioGallery();
+});
+$('#studio-gallery-search')?.addEventListener('input', renderStudioGallery);
+
+api('/api/v1/providers').then(({ providers }) => {
+  const configured = (providers || []).filter((provider) => provider.configured);
+  if ($('#studio-provider-summary')) $('#studio-provider-summary').textContent = configured.length ? `${configured.length} provider${configured.length > 1 ? 's' : ''} ready` : 'Connect a provider in Settings';
+}).catch(() => {});
+syncStudioComposer();
+refreshStudioGallery();
