@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, shell, ipcMain, Menu } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('node:path');
 const net = require('node:net');
@@ -138,6 +138,29 @@ ipcMain.handle('updates:install', () => {
   return updateState;
 });
 
+function sendMenuAction(action) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('menu-action', action);
+}
+
+function buildApplicationMenu() {
+  const template = [
+    { label: 'File', submenu: [{ role: 'quit', label: 'Exit' }] },
+    { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
+    { label: 'View', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }] },
+    {
+      label: 'Help',
+      submenu: [
+        { label: 'Help & Updates', click: () => sendMenuAction('help') },
+        { label: 'About AI Gen Studio', click: () => sendMenuAction('about') },
+        { label: 'Provider Settings', click: () => sendMenuAction('settings') },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 async function createWindow() {
   setupAutoUpdater();
   backendPort = await findFreePort();
@@ -148,7 +171,7 @@ async function createWindow() {
     height: 940,
     minWidth: 960,
     minHeight: 680,
-    backgroundColor: '#0b0d12',
+    backgroundColor: '#fbfbfd',
     title: 'AI Gen Studio',
     webPreferences: {
       contextIsolation: true,
@@ -169,10 +192,13 @@ async function createWindow() {
   }
 }
 
-app.whenReady().then(() => createWindow().catch((err) => {
+app.whenReady().then(() => {
+  buildApplicationMenu();
+  return createWindow();
+}).catch((err) => {
   dialog.showErrorBox('Could not start AI Gen Studio', err.message);
   app.quit();
-}));
+});
 
 app.on('before-quit', () => {
   app.isQuitting = true;

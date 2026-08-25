@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0b0d12" />
+  <meta name="theme-color" content="#fbfbfd" />
   <title>AI Gen Studio</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>AI</text></svg>" />
   <link rel="stylesheet" href="/styles.css" />
@@ -41,7 +41,7 @@
       <div class="studio-hero-top"><div><p class="eyebrow">Creative workspace</p><h2>What are you making?</h2><p>Start with an idea, choose a workspace, and keep every generated asset in one place.</p></div><div class="studio-model-badge"><span class="status-dot"></span><span id="studio-provider-summary">Local studio</span></div></div>
       <div class="studio-composer"><div class="composer-tools"><button type="button" class="composer-tool" id="studio-add-reference">＋ <span>Reference</span></button><button type="button" class="composer-tool" id="studio-open-assets">▧ <span>Assets</span></button></div><textarea id="studio-prompt" rows="3" placeholder="Describe the video, image, audio or UGC ad you want to make…"></textarea><div class="composer-footer"><label class="composer-select"><span>Workspace</span><select id="studio-workspace-select"><option value="video">Video</option><option value="ugc">UGC Ad</option><option value="image">Image</option><option value="audio">Audio</option><option value="chat">Chat</option></select></label><button type="button" class="composer-chip" id="studio-format-chip">9:16 · 8s</button><button type="button" class="composer-chip" id="studio-audio-chip">◉ Audio</button><span class="composer-spacer"></span><button type="button" class="btn btn-primary studio-run" id="studio-run">Open workspace <span>↗</span></button></div></div>
     </section>
-    <section class="studio-gallery" aria-label="Studio gallery"><div class="gallery-head"><div class="gallery-tabs"><button type="button" class="gallery-tab active" id="gallery-inspiration">Inspiration</button><button type="button" class="gallery-tab" id="gallery-assets">Assets</button></div><div class="gallery-actions"><input id="studio-gallery-search" type="search" placeholder="Search prompts or assets" autocomplete="off" /><button type="button" class="btn btn-ghost gallery-library" id="studio-open-library">Open Library</button></div></div><div id="studio-gallery-grid" class="studio-gallery-grid"><div class="gallery-loading">Loading your gallery…</div></div></section>
+    <section class="studio-gallery" aria-label="Studio gallery" hidden><div class="gallery-head"><div class="gallery-tabs"><button type="button" class="gallery-tab active" id="gallery-inspiration">Inspiration</button><button type="button" class="gallery-tab" id="gallery-assets">Assets</button></div><div class="gallery-actions"><input id="studio-gallery-search" type="search" placeholder="Search prompts or assets" autocomplete="off" /><button type="button" class="btn btn-ghost gallery-library" id="studio-open-library">Open Library</button></div></div><div id="studio-gallery-grid" class="studio-gallery-grid"><div class="gallery-loading">Loading your gallery…</div></div></section>
 
     <section id="tab-video" class="panel active" role="tabpanel" aria-labelledby="tab-btn-video">
       <form id="video-form" class="gen-form" novalidate>

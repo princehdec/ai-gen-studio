@@ -154,6 +154,15 @@ for (const name of rememberedRadioGroups) {
 }
 
 /* --------------------------------- tabs ---------------------------------- */
+const studioComposerTabs = new Set(['video', 'ugc', 'image', 'audio']);
+function syncStudioSurface(tab = currentTab) {
+  const hero = $('.studio-hero');
+  const gallery = $('.studio-gallery');
+  if (hero) hero.hidden = !studioComposerTabs.has(tab);
+  if (gallery) gallery.hidden = tab !== 'history';
+  document.body.dataset.workspace = tab;
+}
+
 $$('.tab').forEach((btn) => btn.addEventListener('click', () => {
   $$('.tab').forEach((b) => {
     const selected = b === btn;
@@ -166,13 +175,20 @@ $$('.tab').forEach((btn) => btn.addEventListener('click', () => {
     p.hidden = !active;
   });
   currentTab = btn.dataset.tab;
+  syncStudioSurface(currentTab);
   saveWorkspaceSettings();
   const selectedPanel = document.getElementById(`tab-${currentTab}`);
-  if (selectedPanel) requestAnimationFrame(() => selectedPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  const shellTarget = currentTab === 'history'
+    ? $('.studio-gallery')
+    : studioComposerTabs.has(currentTab)
+      ? $('.studio-hero')
+      : selectedPanel;
+  if (shellTarget) requestAnimationFrame(() => shellTarget.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   if (currentTab === 'history') loadHistory(true).catch((err) => showError('#v-error', err));
 }));
 const rememberedTab = readWorkspaceMemory().activeTab;
 if (rememberedTab) document.querySelector(`.tab[data-tab="${CSS.escape(rememberedTab)}"]`)?.click();
+syncStudioSurface(currentTab);
 
 /* ------------------------------- model lists ------------------------------ */
 const MODEL_KINDS = ['video', 'image', 'audio'];
@@ -934,6 +950,7 @@ const updateCheck = $('#update-check');
 const updateDownload = $('#update-download');
 const updateInstall = $('#update-install');
 const updateBridge = window.desktopUpdates;
+window.desktopMenu?.onAction((action) => document.getElementById(`${action}-open`)?.click());
 
 function renderUpdateState(state = {}) {
   if (updateMessage) updateMessage.textContent = state.message || 'Update status unavailable.';
