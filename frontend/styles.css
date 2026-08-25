@@ -683,6 +683,21 @@ main { width: min(1320px, 100%); }
 .gen-form { background: var(--panel); }
 .field-label { color: #777b88; }
 input[type="text"], input[type="search"], textarea, select, input[list] { color: var(--text); background: #fff; border-color: #dfe2ea; }
+.settings-dialog input[type="url"], .settings-dialog input[type="password"], .settings-dialog input[type="text"], .settings-dialog select, .settings-dialog textarea {
+  color: #242630;
+  background: #ffffff;
+  border-color: #dfe2ea;
+}
+.settings-dialog input[type="url"]:hover, .settings-dialog input[type="password"]:hover, .settings-dialog input[type="text"]:hover, .settings-dialog select:hover, .settings-dialog textarea:hover {
+  background: #ffffff;
+  border-color: #c9cde0;
+}
+.settings-dialog input[type="url"]:focus, .settings-dialog input[type="password"]:focus, .settings-dialog input[type="text"]:focus, .settings-dialog select:focus, .settings-dialog textarea:focus {
+  color: #20222b;
+  background: #ffffff;
+}
+.settings-dialog input::placeholder, .settings-dialog textarea::placeholder { color: #8b90a0; opacity: 1; }
+.settings-dialog input:disabled, .settings-dialog select:disabled { color: #656b7a; background: #f1f3f7; border-color: #dfe2ea; }
 input[type="file"] { color: #777b88; }
 ::placeholder { color: #b0b3bd; }
 .radio-cards span { background: #fafbfe; border-color: var(--border); }
