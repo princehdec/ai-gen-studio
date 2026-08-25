@@ -12,7 +12,7 @@ cp .env.example .env   # if .env doesn't exist yet
 npm start
 ```
 
-Open **http://localhost:8787** — tabs for Video, Image, Audio, Enhance, Chat and a unified Library.
+Open **http://localhost:8787** — tabs for Video, Image, Audio and a unified History.
 
 ## What it does
 
@@ -34,6 +34,12 @@ Models are dropdowns fed live from OpenRouter (`/videos/models`, `/images/models
 - **Reliability** — failed video jobs keep polling until they finish or hit `VIDEO_TIMEOUT_MIN` (default 15); download hiccups retry automatically; GET requests retry with backoff; paid POSTs never auto-retry (no double billing); friendly errors for invalid key (401), insufficient credits (402), rate limits (429), content-policy failures.
 - **Storage swap** — implement `backend/src/storage/s3.js` with the same four functions as `local.js` (`newRel/saveBuffer/saveWebStream/remove`) and set `STORAGE_DRIVER=s3`.
 
+## UGC Studio
+
+The desktop app includes a guided UGC Ad Studio workflow. Enter a product, target audience, campaign goal, offer, platform, tone, and language to create three ad angles. Select an angle to generate an editable script and scene plan, review the visual prompts and voiceover, then produce scene clips with a configured OpenRouter text-to-video model. The app can generate a matching voiceover and assemble completed scene videos into one local MP4 with FFmpeg. Projects, angles, scripts, and scene prompts are saved in the local SQLite database; generated media remains in the local Library.
+
+The first UGC workflow is intentionally guided rather than fully autonomous: review claims, scripts, and scenes before spending provider credits. Scene generation currently uses text-to-video clips, and the export uses the platform’s recommended aspect ratio. Captions are reserved for a later export pass.
+
 ## API quick reference
 
 ```bash
@@ -52,7 +58,7 @@ backend/src/
   db.js            SQLite schema + queries
   openrouter.js    OpenRouter client (video jobs, images, streaming audio, model lists)
   storage/         storage driver abstraction (local disk now, S3-ready interface)
-  routes/          videos.js · images.js · audio.js · enhance.js · generations.js · providers.js
+  routes/          videos.js · images.js · audio.js · ugc.js · generations.js
 frontend/          index.html · app.js · styles.css  (vanilla SPA, no build step)
 storage/files/     permanent generated media
 ```
@@ -102,7 +108,7 @@ To enable automatic updates, add a public GitHub repository URL to the root `pac
 ```json
 "repository": {
   "type": "git",
-  "url": "https://github.com/princehdec/ai-gen-studio.git"
+  "url": "https://github.com/YOUR_ACCOUNT/YOUR_REPOSITORY.git"
 }
 ```
 

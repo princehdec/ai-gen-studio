@@ -558,3 +558,80 @@ textarea, #v-prompt, #i-prompt, #a-text, #c-prompt { font-family: "JetBrains Mon
 .voice-clone-control p { margin: 0; }
 .voice-clone-control .field { margin: 0; }
 .voice-clone-control .check { margin: 0; }
+
+/* ------------------------------ UGC Studio -------------------------------- */
+.ugc-panel { max-width: 1380px; }
+.ugc-shell { display: grid; grid-template-columns: minmax(280px, 350px) minmax(0, 1fr); gap: 18px; min-height: 680px; }
+.ugc-sidebar, .ugc-workspace { border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
+.ugc-sidebar { padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+.ugc-brief-form { display: grid; gap: 12px; }
+.ugc-brief-form .field { margin: 0; }
+.ugc-brief-form .field-row { gap: 10px; }
+.ugc-recent { border-top: 1px solid var(--border-soft); padding-top: 16px; }
+.section-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 9px; }
+#ugc-projects { display: grid; gap: 6px; }
+.ugc-recent-item { display: grid; gap: 3px; width: 100%; padding: 10px; text-align: left; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text); cursor: pointer; }
+.ugc-recent-item:hover { background: var(--panel-2); border-color: var(--border); }
+.ugc-recent-item small { color: var(--muted); }
+.ugc-workspace { padding: 28px; background: radial-gradient(circle at 80% 0%, rgba(79,70,229,.07), transparent 35%), var(--panel); }
+.ugc-empty { min-height: 620px; display: grid; align-content: center; justify-items: center; text-align: center; max-width: 620px; margin: auto; }
+.ugc-empty-mark { color: var(--accent); font-size: 12px; letter-spacing: .22em; font-weight: 800; border: 1px solid rgba(79,70,229,.35); border-radius: 999px; padding: 7px 12px; margin-bottom: 20px; }
+.ugc-empty h2 { font-size: clamp(30px, 4vw, 52px); letter-spacing: -.05em; margin: 0 0 12px; }
+.ugc-empty p { max-width: 520px; color: var(--muted); line-height: 1.6; }
+.ugc-project-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; padding-bottom: 22px; border-bottom: 1px solid var(--border-soft); }
+.ugc-project-head h2 { margin: 0 0 4px; font-size: 30px; letter-spacing: -.04em; }
+.ugc-project-actions, .ugc-production-actions { display: flex; gap: 9px; flex-wrap: wrap; }
+.ugc-step { padding: 24px 0; border-bottom: 1px solid var(--border-soft); }
+.ugc-step:last-child { border-bottom: 0; }
+.step-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.step-head h3 { margin: 0 0 4px; font-size: 16px; }
+.step-head p { margin: 0; }
+.step-number { width: 26px; height: 26px; flex: 0 0 26px; display: inline-grid; place-items: center; border-radius: 50%; background: rgba(79,70,229,.12); color: var(--accent); font-size: 12px; font-weight: 700; }
+.ugc-angle-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.ugc-angle-card { display: grid; gap: 8px; min-height: 170px; padding: 15px; text-align: left; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); color: var(--text); cursor: pointer; }
+.ugc-angle-card:hover, .ugc-angle-card.selected { border-color: var(--accent); background: rgba(79,70,229,.08); box-shadow: 0 0 0 2px rgba(79,70,229,.1); }
+.ugc-angle-card strong { font-size: 15px; }
+.ugc-angle-card small, .ugc-angle-card em, .angle-hook { color: var(--muted); line-height: 1.4; font-style: normal; }
+.ugc-angle-card .angle-hook { color: var(--text); font-size: 13px; }
+.angle-index { color: var(--accent); font-size: 11px; letter-spacing: .15em; }
+.ugc-script-editor { display: grid; gap: 14px; }
+.ugc-script-editor .field { margin: 0; }
+.ugc-scenes { display: grid; gap: 10px; }
+.ugc-scene-card { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+.ugc-scene-head { display: flex; align-items: center; gap: 10px; }
+.ugc-scene-head > div { display: grid; gap: 3px; }
+.ugc-scene-head .hint { font-size: 12px; }
+.ugc-production { display: grid; gap: 14px; }
+.ugc-production .field { margin: 0; }
+.ugc-production-actions { border-top: 1px solid var(--border-soft); padding-top: 14px; }
+.ugc-scenes-output { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.ugc-output-card, .ugc-export-card { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+.ugc-output-card video, .ugc-export-card video { width: 100%; max-height: 330px; border-radius: 7px; background: #000; }
+.ugc-output-card small, .ugc-export-card span { color: var(--muted); }
+.ugc-export-card { grid-column: 1 / -1; grid-template-columns: minmax(180px, 300px) 1fr; align-items: center; }
+.ugc-export-card video { grid-row: span 2; max-height: 420px; }
+.ugc-export-card .dl { justify-self: start; }
+@media (max-width: 900px) { .ugc-shell { grid-template-columns: 1fr; } .ugc-angle-grid { grid-template-columns: 1fr; } .ugc-workspace { padding: 18px; } }
+@media (max-width: 560px) { .ugc-project-head { display: grid; } .ugc-export-card { grid-template-columns: 1fr; } .ugc-export-card video { grid-row: auto; } }
+
+/* Runnable-inspired dark surface for the UGC command workspace */
+.ugc-panel { color: #e9e9eb; }
+.ugc-sidebar, .ugc-workspace { background: #151515; border-color: #2a2a2d; }
+.ugc-workspace { background: radial-gradient(circle at 70% 0%, rgba(91,83,220,.16), transparent 32%), #151515; }
+.ugc-sidebar .form-heading h2, .ugc-workspace h2, .ugc-workspace h3, .ugc-sidebar .field-label { color: #f1f1f2; }
+.ugc-sidebar .form-heading p:not(.eyebrow), .ugc-workspace .hint, .ugc-sidebar .field-help, .ugc-empty p { color: #9e9ea5; }
+.ugc-sidebar input, .ugc-sidebar select, .ugc-workspace input, .ugc-workspace textarea { color: #f1f1f2; background: #222224; border-color: #303034; }
+.ugc-sidebar input:focus, .ugc-sidebar select:focus, .ugc-workspace input:focus, .ugc-workspace textarea:focus { background: #242428; border-color: #6c63ff; box-shadow: 0 0 0 3px rgba(108,99,255,.16); }
+.ugc-recent { border-top-color: #2a2a2d; }
+.ugc-recent-item { color: #e9e9eb; }
+.ugc-recent-item:hover { background: #222224; border-color: #38383d; }
+.ugc-angle-card, .ugc-scene-card, .ugc-output-card, .ugc-export-card { background: #1d1d1f; border-color: #333338; color: #eee; }
+.ugc-angle-card:hover, .ugc-angle-card.selected { background: rgba(92,83,220,.18); border-color: #6c63ff; }
+.ugc-angle-card .angle-hook { color: #e9e9eb; }
+.ugc-step, .ugc-project-head { border-bottom-color: #2a2a2d; }
+.ugc-project-head h2 { color: #f7f7f8; }
+.ugc-empty-mark, .step-number, .angle-index { color: #8b83ff; }
+.ugc-empty-mark, .step-number { border-color: rgba(139,131,255,.42); background: rgba(139,131,255,.12); }
+.ugc-production-actions { border-top-color: #2a2a2d; }
+.ugc-panel .btn-ghost { background: #202023; color: #ededee; border-color: #343439; }
+.ugc-panel .btn-ghost:hover { background: #2a2a2e; border-color: #6c63ff; color: #fff; }

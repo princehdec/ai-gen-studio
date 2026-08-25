@@ -101,6 +101,7 @@ const rememberedFields = [
   'v-provider', 'v-model', 'v-duration', 'v-resolution', 'v-aspect', 'v-audio', 'v-batch-count',
   'i-provider', 'i-model', 'i-aspect', 'i-count', 'i-format', 'i-batch-count',
   'a-provider', 'a-model', 'a-voice', 'a-format', 'a-text', 'a-preview-text', 'a-voice-reference-transcript', 'a-batch-count',
+  'ugc-product', 'ugc-audience', 'ugc-goal', 'ugc-offer', 'ugc-platform', 'ugc-duration', 'ugc-tone', 'ugc-language', 'ugc-planner-provider', 'ugc-planner-model', 'ugc-video-model', 'ugc-scene-batch', 'ugc-voiceover',
   'c-provider', 'c-model', 'c-system', 'c-temperature', 'c-max-tokens',
   'e-method', 'e-scale', 'h-search',
 ];
@@ -957,3 +958,253 @@ updateDownload?.addEventListener('click', async () => {
 updateInstall?.addEventListener('click', () => {
   if (updateBridge) updateBridge.install();
 });
+
+/* ============================== UGC STUDIO ================================ */
+const UGC_PLATFORM_ASPECTS = {
+  tiktok: '9:16', instagram_reels: '9:16', youtube_shorts: '9:16', instagram_feed: '4:5', youtube: '16:9',
+};
+let ugcState = { project: null, selectedAngle: null, sceneGenerations: [], audioGeneration: null };
+let ugcSaveTimer = null;
+
+function ugcShowError(err) {
+  const el = $('#ugc-error');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = err.message || String(err);
+}
+function ugcClearError() { if ($('#ugc-error')) $('#ugc-error').hidden = true; }
+function ugcSetStatus(text) { if ($('#ugc-production-status')) $('#ugc-production-status').textContent = text; }
+
+function ugcPlanFromProject(project) {
+  return project?.plan && typeof project.plan === 'object' ? project.plan : {};
+}
+
+function renderUgcProject(project) {
+  ugcState.project = project;
+  const plan = ugcPlanFromProject(project);
+  const angles = Array.isArray(plan.angles) ? plan.angles : [];
+  ugcState.selectedAngle = plan.angle || ugcState.selectedAngle || angles[0] || null;
+  $('#ugc-empty').hidden = true;
+  $('#ugc-project-view').hidden = false;
+  $('#ugc-project-title').textContent = project.title || plan.title || 'UGC Ad';
+  const brief = project.brief || {};
+  $('#ugc-project-meta').textContent = `${brief.platform || 'social'} · ${brief.duration || 25}s · ${project.status || 'draft'}`;
+  renderUgcAngles();
+  renderUgcScript();
+  $('#ugc-script').disabled = !ugcState.selectedAngle;
+  $('#ugc-produce').disabled = !Array.isArray(plan.scenes) || plan.scenes.length < 2;
+  $('#ugc-export').disabled = ugcState.sceneGenerations.length < 2;
+  if ($('#ugc-video-model') && !$('#ugc-video-model').value) $('#ugc-video-model').value = $('#v-model')?.value || '';
+}
+
+function renderUgcAngles() {
+  const host = $('#ugc-angles');
+  if (!host) return;
+  const angles = Array.isArray(ugcPlanFromProject(ugcState.project).angles) ? ugcPlanFromProject(ugcState.project).angles : [];
+  host.replaceChildren();
+  angles.forEach((angle, index) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `ugc-angle-card${ugcState.selectedAngle?.id === angle.id ? ' selected' : ''}`;
+    card.innerHTML = `<span class="angle-index">0${index + 1}</span><strong>${esc(angle.title || `Angle ${index + 1}`)}</strong><span class="angle-hook">${esc(angle.hook || '')}</span><small>${esc(angle.description || '')}</small><em>${esc(angle.why_it_works || '')}</em>`;
+    card.addEventListener('click', () => {
+      ugcState.selectedAngle = angle;
+      ugcState.project.plan.angle = angle;
+      renderUgcAngles();
+      $('#ugc-script').disabled = false;
+      saveUgcProjectSoon();
+    });
+    host.appendChild(card);
+  });
+}
+
+function renderUgcScript() {
+  const plan = ugcPlanFromProject(ugcState.project);
+  const editor = $('#ugc-script-editor');
+  const empty = $('#ugc-script-empty');
+  const scenes = Array.isArray(plan.scenes) ? plan.scenes : [];
+  if (!scenes.length) {
+    editor.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  editor.hidden = false;
+  empty.hidden = true;
+  $('#ugc-creator-direction').value = plan.creator_direction || '';
+  $('#ugc-full-script').value = plan.script || scenes.map((scene) => scene.voiceover).filter(Boolean).join(' ');
+  const host = $('#ugc-scenes');
+  host.replaceChildren();
+  scenes.forEach((scene, index) => {
+    const card = document.createElement('article');
+    card.className = 'ugc-scene-card';
+    card.dataset.sceneId = scene.id || `scene-${index + 1}`;
+    card.innerHTML = `<div class="ugc-scene-head"><span class="step-number">${index + 1}</span><div><strong>${esc(scene.label || `Scene ${index + 1}`)}</strong><span class="hint">${Number(scene.duration) || 4}s · ${esc(scene.transition || 'quick cut')}</span></div></div><div class="field-row"><label class="field"><span class="field-label">Label</span><input data-scene-field="label" value="${esc(scene.label || '')}" /></label><label class="field"><span class="field-label">Seconds</span><input data-scene-field="duration" type="number" min="2" max="15" value="${Number(scene.duration) || 4}" /></label></div><label class="field"><span class="field-label">Visual prompt</span><textarea data-scene-field="visual_prompt" rows="3">${esc(scene.visual_prompt || '')}</textarea></label><label class="field"><span class="field-label">Voiceover</span><textarea data-scene-field="voiceover" rows="2">${esc(scene.voiceover || '')}</textarea></label><label class="field"><span class="field-label">On-screen text</span><input data-scene-field="on_screen_text" value="${esc(scene.on_screen_text || '')}" /></label>`;
+    card.querySelectorAll('[data-scene-field]').forEach((field) => field.addEventListener('input', () => { updateUgcPlanFromEditor(); saveUgcProjectSoon(); }));
+    host.appendChild(card);
+  });
+}
+
+function updateUgcPlanFromEditor() {
+  if (!ugcState.project) return;
+  const plan = ugcState.project.plan || {};
+  plan.creator_direction = $('#ugc-creator-direction').value;
+  plan.script = $('#ugc-full-script').value;
+  plan.scenes = $$('.ugc-scene-card').map((card, index) => {
+    const get = (field) => $(`[data-scene-field="${field}"]`, card)?.value || '';
+    return { ...(plan.scenes[index] || {}), id: card.dataset.sceneId, order: index + 1, label: get('label'), duration: Math.max(2, Math.min(15, Number(get('duration')) || 4)), visual_prompt: get('visual_prompt'), voiceover: get('voiceover'), on_screen_text: get('on_screen_text') };
+  });
+  $('#ugc-produce').disabled = plan.scenes.length < 2;
+  ugcState.project.plan = plan;
+}
+
+function saveUgcProjectSoon() {
+  if (!ugcState.project?.id) return;
+  clearTimeout(ugcSaveTimer);
+  ugcSaveTimer = setTimeout(async () => {
+    try { await api(`/api/v1/ugc/projects/${encodeURIComponent(ugcState.project.id)}`, { method: 'PUT', body: { plan: ugcState.project.plan } }); } catch (err) { console.warn('[ugc] autosave failed:', err.message); }
+  }, 600);
+}
+
+async function loadUgcProjects() {
+  try {
+    const { projects } = await api('/api/v1/ugc/projects');
+    const host = $('#ugc-projects');
+    if (!host) return;
+    host.replaceChildren();
+    (projects || []).slice(0, 8).forEach((project) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'ugc-recent-item';
+      button.innerHTML = `<strong>${esc(project.title)}</strong><small>${esc(project.status)} · ${esc(project.brief?.platform || 'social')}</small>`;
+      button.addEventListener('click', () => renderUgcProject(project));
+      host.appendChild(button);
+    });
+  } catch (err) { console.warn('[ugc] projects unavailable:', err.message); }
+}
+
+$('#ugc-brief-form')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  ugcClearError();
+  const button = $('#ugc-plan');
+  button.dataset.label ??= button.textContent;
+  busy(button, true, 'Planning…');
+  const brief = {
+    product: $('#ugc-product').value,
+    audience: $('#ugc-audience').value,
+    goal: $('#ugc-goal').value,
+    offer: $('#ugc-offer').value,
+    platform: $('#ugc-platform').value,
+    duration: Number($('#ugc-duration').value),
+    tone: $('#ugc-tone').value,
+    language: $('#ugc-language').value,
+  };
+  try {
+    const { project } = await api('/api/v1/ugc/plan', { method: 'POST', body: { brief, provider: $('#ugc-planner-provider').value, model: $('#ugc-planner-model').value.trim() || undefined } });
+    ugcState = { project: null, selectedAngle: null, sceneGenerations: [], audioGeneration: null };
+    renderUgcProject(project);
+    loadUgcProjects();
+  } catch (err) { ugcShowError(err); }
+  finally { busy(button, false); }
+});
+
+$('#ugc-script')?.addEventListener('click', async () => {
+  if (!ugcState.project || !ugcState.selectedAngle) return;
+  const button = $('#ugc-script');
+  button.dataset.label ??= button.textContent;
+  busy(button, true, 'Writing…');
+  ugcClearError();
+  try {
+    const { project } = await api('/api/v1/ugc/script', { method: 'POST', body: { project_id: ugcState.project.id, angle: ugcState.selectedAngle, provider: $('#ugc-planner-provider').value, model: $('#ugc-planner-model').value.trim() || undefined } });
+    ugcState.sceneGenerations = [];
+    ugcState.audioGeneration = null;
+    renderUgcProject(project);
+    ugcSetStatus('Script ready. Review each scene before producing media.');
+    loadUgcProjects();
+  } catch (err) { ugcShowError(err); }
+  finally { busy(button, false); }
+});
+
+$('#ugc-new')?.addEventListener('click', () => {
+  ugcState = { project: null, selectedAngle: null, sceneGenerations: [], audioGeneration: null };
+  $('#ugc-project-view').hidden = true;
+  $('#ugc-empty').hidden = false;
+  $('#ugc-scenes-output').replaceChildren();
+  ugcSetStatus('');
+});
+
+async function ugcGenerateScene(scene, index, videoModel, aspect) {
+  const generated = await api('/api/v1/videos', { method: 'POST', body: { provider: 'openrouter', model: videoModel || undefined, prompt: scene.visual_prompt, mode: 't2v', duration: Math.max(4, Math.min(15, Number(scene.duration) || 4)), resolution: '720p', aspect_ratio: aspect, generate_audio: false } });
+  const finished = await waitForVideoTerminal(generated);
+  if (finished.status !== 'completed') throw new Error(`Scene ${index + 1} failed: ${finished.error || 'video generation failed'}`);
+  return finished;
+}
+
+async function ugcRunPool(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const run = async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await worker(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
+  return results;
+}
+
+$('#ugc-produce')?.addEventListener('click', async () => {
+  if (!ugcState.project) return;
+  updateUgcPlanFromEditor();
+  const scenes = ugcState.project.plan?.scenes || [];
+  if (scenes.length < 2) return ugcShowError(new Error('Generate and review at least two scenes first.'));
+  const button = $('#ugc-produce');
+  button.dataset.label ??= button.textContent;
+  busy(button, true, 'Producing…');
+  $('#ugc-export').disabled = true;
+  ugcClearError();
+  try {
+    const brief = ugcState.project.brief || {};
+    const aspect = UGC_PLATFORM_ASPECTS[brief.platform] || '9:16';
+    const videoModel = $('#ugc-video-model').value.trim() || $('#v-model').value.trim();
+    const concurrency = Number($('#ugc-scene-batch').value) || 1;
+    ugcSetStatus(`Generating ${scenes.length} scene clips…`);
+    ugcState.sceneGenerations = await ugcRunPool(scenes, concurrency, async (scene, index) => {
+      ugcSetStatus(`Generating scene ${index + 1} of ${scenes.length}…`);
+      return ugcGenerateScene(scene, index, videoModel, aspect);
+    });
+    if ($('#ugc-voiceover').checked) {
+      ugcSetStatus('Generating matching voiceover…');
+      const speechModels = await api('/api/v1/audio/models?provider=openrouter&mode=speech');
+      const speechModel = speechModels.default_model || 'fish-audio/s2.1-pro-free:free';
+      const script = $('#ugc-full-script').value.trim() || scenes.map((scene) => scene.voiceover).filter(Boolean).join(' ');
+      ugcState.audioGeneration = await api('/api/v1/audio', { method: 'POST', body: { provider: 'openrouter', mode: 'speech', model: speechModel, prompt: script, voice: 'alloy', format: 'mp3' } });
+    } else {
+      ugcState.audioGeneration = null;
+    }
+    $('#ugc-scenes-output').innerHTML = ugcState.sceneGenerations.map((gen, index) => `<article class="ugc-output-card"><span>Scene ${index + 1}</span><video controls preload="metadata" src="${esc(gen.file_url)}"></video><small>${esc(scenes[index].label || '')}</small></article>`).join('');
+    $('#ugc-export').disabled = false;
+    ugcSetStatus(`Ready to assemble ${ugcState.sceneGenerations.length} scenes${ugcState.audioGeneration ? ' with voiceover' : ''}.`);
+    saveUgcProjectSoon();
+  } catch (err) { ugcShowError(err); ugcSetStatus('Production stopped. Review the error and try again.'); }
+  finally { busy(button, false); }
+});
+
+$('#ugc-export')?.addEventListener('click', async () => {
+  if (ugcState.sceneGenerations.length < 2 || !ugcState.project) return;
+  const button = $('#ugc-export');
+  button.dataset.label ??= button.textContent;
+  busy(button, true, 'Assembling…');
+  ugcClearError();
+  try {
+    const aspect = UGC_PLATFORM_ASPECTS[ugcState.project.brief?.platform] || '9:16';
+    const result = await api('/api/v1/ugc/assemble', { method: 'POST', body: { project_id: ugcState.project.id, generation_ids: ugcState.sceneGenerations.map((gen) => gen.id), audio_generation_id: ugcState.audioGeneration?.id, title: ugcState.project.title, aspect_ratio: aspect } });
+    $('#ugc-scenes-output').insertAdjacentHTML('afterbegin', `<article class="ugc-export-card"><div><strong>Export ready</strong><span class="hint">Saved to Library · ${esc(aspect)}</span></div><video controls preload="metadata" src="${esc(result.file_url)}"></video><a class="dl" href="${esc(result.file_url)}" download>Download UGC MP4</a></article>`);
+    ugcSetStatus('UGC MP4 assembled and saved to Library.');
+    ugcState.project.status = 'exported';
+    loadUgcProjects();
+    refreshHistoryCount();
+  } catch (err) { ugcShowError(err); }
+  finally { busy(button, false); }
+});
+
+loadUgcProjects();

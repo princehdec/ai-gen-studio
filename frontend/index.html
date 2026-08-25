@@ -27,6 +27,7 @@
     </div>
     <nav class="tabs" role="tablist" aria-label="Workspace sections">
       <button class="tab active" id="tab-btn-video" data-tab="video" role="tab" aria-selected="true" aria-controls="tab-video">Video</button>
+      <button class="tab" id="tab-btn-ugc" data-tab="ugc" role="tab" aria-selected="false" aria-controls="tab-ugc">UGC Studio</button>
       <button class="tab" id="tab-btn-image" data-tab="image" role="tab" aria-selected="false" aria-controls="tab-image">Image</button>
       <button class="tab" id="tab-btn-audio" data-tab="audio" role="tab" aria-selected="false" aria-controls="tab-audio">Audio</button>
       <button class="tab" id="tab-btn-enhance" data-tab="enhance" role="tab" aria-selected="false" aria-controls="tab-enhance">Enhance</button>
@@ -68,6 +69,35 @@
         <div class="error-banner" id="v-error" role="alert" hidden></div>
       </form>
       <h2 class="section-title">Active jobs</h2><div id="v-jobs" class="grid"></div><div id="v-jobs-empty" class="empty-note">No jobs running. Generated videos appear here while rendering.</div>
+    </section>
+
+    <section id="tab-ugc" class="panel ugc-panel" role="tabpanel" aria-labelledby="tab-btn-ugc" hidden>
+      <div class="ugc-shell">
+        <aside class="ugc-sidebar">
+          <div class="form-heading"><div><p class="eyebrow">Build</p><h2>UGC Ad Studio</h2><p>Brief the product, choose an angle, then produce a reviewable short-form ad.</p></div></div>
+          <form id="ugc-brief-form" class="ugc-brief-form" novalidate>
+            <label class="field"><span class="field-label">Product or service</span><input id="ugc-product" required placeholder="e.g. A compact skincare serum" autocomplete="off" /></label>
+            <label class="field"><span class="field-label">Target audience</span><input id="ugc-audience" required placeholder="e.g. Busy professionals with dry skin" autocomplete="off" /></label>
+            <label class="field"><span class="field-label">Campaign goal</span><input id="ugc-goal" placeholder="e.g. Drive trials and explain the key benefit" autocomplete="off" /></label>
+            <label class="field"><span class="field-label">Offer / call to action</span><input id="ugc-offer" placeholder="e.g. Try it today with free shipping" autocomplete="off" /></label>
+            <div class="field-row"><label class="field"><span class="field-label">Platform</span><select id="ugc-platform"><option value="tiktok">TikTok</option><option value="instagram_reels">Instagram Reels</option><option value="youtube_shorts">YouTube Shorts</option><option value="instagram_feed">Instagram Feed</option><option value="youtube">YouTube</option></select></label><label class="field"><span class="field-label">Target seconds</span><input id="ugc-duration" type="number" min="8" max="60" value="25" /></label></div>
+            <div class="field-row"><label class="field"><span class="field-label">Tone</span><input id="ugc-tone" value="authentic, energetic and trustworthy" /></label><label class="field"><span class="field-label">Language</span><input id="ugc-language" value="English" /></label></div>
+            <div class="field-row"><label class="field"><span class="field-label">Planner provider</span><select id="ugc-planner-provider"><option value="openrouter">OpenRouter</option><option value="nvidia">NVIDIA NIM</option><option value="huggingface">Hugging Face</option></select></label><label class="field grow"><span class="field-label">Planner model</span><input id="ugc-planner-model" placeholder="Use a compatible chat model" autocomplete="off" /></label></div>
+            <p class="field-help">The planner creates angles and scripts; review them before generating media.</p>
+            <button type="submit" class="btn btn-primary" id="ugc-plan">Create angles</button><div class="error-banner" id="ugc-error" role="alert" hidden></div>
+          </form>
+          <div class="ugc-recent"><div class="section-label">Recent UGC projects</div><div id="ugc-projects"></div></div>
+        </aside>
+        <section class="ugc-workspace" aria-live="polite">
+          <div id="ugc-empty" class="ugc-empty"><div class="ugc-empty-mark">UGC</div><h2>What needs to be made?</h2><p>Start with a product brief. AI Gen Studio will suggest three ad angles, then turn your choice into an editable script and scene plan.</p></div>
+          <div id="ugc-project-view" hidden>
+            <div class="ugc-project-head"><div><p class="eyebrow">Project</p><h2 id="ugc-project-title">UGC Ad</h2><p id="ugc-project-meta" class="hint"></p></div><div class="ugc-project-actions"><button type="button" class="btn btn-ghost" id="ugc-new">New brief</button><button type="button" class="btn btn-primary" id="ugc-script" disabled>Generate script</button></div></div>
+            <section class="ugc-step"><div class="step-head"><span class="step-number">1</span><div><h3>Pick an angle</h3><p class="hint">Choose the creative direction before generating assets.</p></div></div><div id="ugc-angles" class="ugc-angle-grid"></div></section>
+            <section class="ugc-step"><div class="step-head"><span class="step-number">2</span><div><h3>Review script and scenes</h3><p class="hint">Edit the copy and visual prompts before you spend provider credits.</p></div></div><div id="ugc-script-editor" class="ugc-script-editor" hidden><label class="field"><span class="field-label">Creator direction</span><textarea id="ugc-creator-direction" rows="2"></textarea></label><label class="field"><span class="field-label">Full voiceover script</span><textarea id="ugc-full-script" rows="4"></textarea></label><div id="ugc-scenes" class="ugc-scenes"></div></div><div id="ugc-script-empty" class="empty-note">Select an angle and generate the script.</div></section>
+            <section class="ugc-step"><div class="step-head"><span class="step-number">3</span><div><h3>Produce and export</h3><p class="hint">Generate scene clips, optionally create voiceover, then assemble one MP4 locally.</p></div></div><div class="ugc-production"><div class="field-row"><label class="field grow"><span class="field-label">Video model</span><input id="ugc-video-model" placeholder="Use your configured video model" autocomplete="off" /></label><label class="field"><span class="field-label">Scene batch</span><select id="ugc-scene-batch"><option value="1">1 scene at a time</option><option value="2">2 scenes at a time</option></select></label></div><div class="field-row"><label class="check"><input type="checkbox" id="ugc-voiceover" checked /><span>Generate a matching voiceover</span></label><label class="check"><input type="checkbox" id="ugc-captions" disabled /><span>Captions (next step)</span></label></div><div class="ugc-production-actions"><button type="button" class="btn btn-ghost" id="ugc-produce" disabled>Produce scenes</button><button type="button" class="btn btn-primary" id="ugc-export" disabled>Assemble MP4</button></div><div id="ugc-production-status" class="batch-status" aria-live="polite"></div><div id="ugc-scenes-output" class="ugc-scenes-output"></div></div></section>
+          </div>
+        </section>
+      </div>
     </section>
 
     <section id="tab-image" class="panel" role="tabpanel" aria-labelledby="tab-btn-image" hidden>

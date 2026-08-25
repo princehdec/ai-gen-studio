@@ -30,6 +30,16 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_gen_type_created ON generations(type, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_gen_status ON generations(status);
+  CREATE TABLE IF NOT EXISTS ugc_projects (
+    id          TEXT PRIMARY KEY,
+    title       TEXT NOT NULL,
+    brief       TEXT NOT NULL,
+    plan        TEXT,
+    status      TEXT NOT NULL DEFAULT 'draft',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_ugc_updated ON ugc_projects(updated_at DESC);
 `);
 
 const COLS = [
