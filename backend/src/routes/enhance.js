@@ -34,6 +34,7 @@ const propainterRoot = process.env.PROPAINTER_ROOT || firstExisting([
   windowsTools && path.join(windowsTools, 'ProPainter'),
 ]);
 const propainterPython = process.env.PROPAINTER_PYTHON || firstExisting([
+  windowsTools && path.join(windowsTools, 'ProPainter', '.venv', 'Scripts', 'python.exe'),
   windowsTools && path.join(windowsTools, 'ProPainter.venv', 'Scripts', 'python.exe'),
 ]) || 'python';
 
@@ -76,6 +77,25 @@ function run(command, args, { cwd, timeoutMs = 30 * 60 * 1000 } = {}) {
 
 async function removeQuietly(file) {
   if (file) await fsp.rm(file, { recursive: true, force: true }).catch(() => {});
+}
+
+function safeUploadExtension(file, kind) {
+  const original = path.extname(file?.originalname || '').toLowerCase();
+  const allowed = kind === 'video' ? ['.mp4', '.mov', '.webm'] : ['.png', '.jpg', '.jpeg', '.webp'];
+  if (allowed.includes(original)) return original;
+  const mime = String(file?.mimetype || '').toLowerCase();
+  if (kind === 'video') return mime.includes('quicktime') ? '.mov' : mime.includes('webm') ? '.webm' : '.mp4';
+  return mime.includes('jpeg') ? '.jpg' : mime.includes('webp') ? '.webp' : '.png';
+}
+
+async function materializeUpload(file, kind) {
+  if (!file?.path) return '';
+  const current = file.path;
+  const extension = safeUploadExtension(file, kind);
+  if (path.extname(current)) return current;
+  const target = `${current}${extension}`;
+  await fsp.rename(current, target);
+  return target;
 }
 
 async function findNewestVideo(root, startedAt) {
@@ -177,7 +197,7 @@ enhance.post('/', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'mask',
     const video = req.files?.video?.[0];
     const maskFile = req.files?.mask?.[0];
     assertVideo(video);
-    input = video.path;
+    input = await materializeUpload(video, 'video');
     const mode = String(req.body?.mode || 'upscale');
     const scale = Number(req.body?.scale || 2);
     const method = String(req.body?.method || (mode === 'cleanup' ? 'propainter' : 'ffmpeg'));
@@ -186,7 +206,13 @@ enhance.post('/', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'mask',
     if (mode === 'cleanup') {
       if (req.body?.rightsConfirmed !== 'true') throw badRequest('Confirm that you own or are authorized to edit this video.');
       assertMask(maskFile);
-      mask = maskFile.path;
+      mask = await materializeUpload(maskFile, 'mask');
+      if (path.extname(mask).toLowerCase() === '.webp') {
+        const convertedMask = `${mask}.png`;
+        await run(ffmpeg, ['-y', '-i', mask, '-frames:v', '1', convertedMask], { timeoutMs: 30000 });
+        await removeQuietly(mask);
+        mask = convertedMask;
+      }
     }
 
     id = randomUUID();
