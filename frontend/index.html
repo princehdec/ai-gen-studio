@@ -50,6 +50,50 @@
     <section class="studio-gallery" aria-label="Studio gallery" hidden><div class="gallery-head"><div class="gallery-tabs"><button type="button" class="gallery-tab active" id="gallery-inspiration">Recent</button><button type="button" class="gallery-tab" id="gallery-assets">Assets</button></div><div class="gallery-actions"><input id="studio-gallery-search" type="search" placeholder="Search prompts or assets" autocomplete="off" /><button type="button" class="btn btn-ghost gallery-library" id="studio-open-library">Open Library</button></div></div><div id="studio-gallery-grid" class="studio-gallery-grid"><div class="gallery-loading">Loading your gallery…</div></div></section>
 
     <section id="tab-video" class="panel active" role="tabpanel" aria-labelledby="tab-btn-video">
+      <section class="video-prompt-surface" aria-label="Video prompt composer">
+        <nav class="video-mode-tabs" aria-label="Video mode">
+          <button type="button" class="video-mode-tab active" data-video-mode="t2v">Text → Video</button>
+          <button type="button" class="video-mode-tab" data-video-mode="i2v">Image → Video</button>
+          <button type="button" class="video-mode-tab" data-video-mode="first_last">First + Last Frame</button>
+          <button type="button" class="video-mode-tab" data-video-mode="reference">Reference</button>
+        </nav>
+        <div class="video-prompt-bar">
+          <div id="video-top-tools" class="video-top-tools">
+            <button type="button" class="video-tool-button" id="video-reference-trigger">＋ Reference</button>
+            <button type="button" class="video-tool-button" id="video-assets-trigger">▧ Assets</button>
+          </div>
+          <div id="video-frame-slots" class="video-frame-slots" hidden>
+            <button type="button" class="video-frame-slot" id="video-first-frame-slot"><span class="video-frame-icon">＋</span><strong>First frame</strong><small>Upload image</small></button>
+            <span class="video-frame-arrow" aria-hidden="true">→</span>
+            <button type="button" class="video-frame-slot" id="video-last-frame-slot"><span class="video-frame-icon">＋</span><strong>Last frame</strong><small>Upload image</small></button>
+          </div>
+          <div id="video-single-frame-slot" class="video-frame-slots" hidden>
+            <button type="button" class="video-frame-slot" id="video-single-frame-trigger"><span class="video-frame-icon">＋</span><strong>Frame</strong><small>Upload image to animate</small></button>
+          </div>
+          <input type="text" id="video-prompt-input" class="video-prompt-input" placeholder="Describe the video you want to make" autocomplete="off" />
+          <div class="video-bar-bottom">
+            <div class="video-pill-cluster">
+              <button type="button" class="video-pill video-settings-toggle" id="video-settings-toggle">720p · 16:9 · 8s <span>⌄</span></button>
+              <button type="button" class="video-pill video-audio-pill is-on" id="video-audio-pill">◉ Audio</button>
+            </div>
+            <div class="video-model-actions">
+              <button type="button" class="video-model-chip" id="video-model-chip">Default model <span>⌄</span></button>
+              <button type="button" class="video-submit-button" id="video-submit-button" aria-label="Generate video" title="Generate video">↑</button>
+            </div>
+          </div>
+          <div id="video-settings-popover" class="video-popover" hidden>
+            <div class="video-popover-section"><span class="video-popover-label">Resolution</span><div class="video-option-row" id="video-resolution-options"><button type="button" data-value="480p">480p</button><button type="button" data-value="720p">720p</button><button type="button" data-value="1080p">1080p</button></div></div>
+            <div class="video-popover-section"><span class="video-popover-label">Aspect ratio</span><div class="video-aspect-grid" id="video-aspect-options"><button type="button" data-value="auto">Auto</button><button type="button" data-value="16:9">16:9</button><button type="button" data-value="4:3">4:3</button><button type="button" data-value="1:1">1:1</button><button type="button" data-value="3:4">3:4</button><button type="button" data-value="9:16">9:16</button></div></div>
+            <div class="video-popover-section"><div class="video-duration-head"><span class="video-popover-label">Duration</span><button type="button" class="video-duration-mode" id="video-duration-mode">Smart</button></div><input type="range" id="video-duration-slider" aria-label="Video duration" /><output id="video-duration-display">8s</output></div>
+          </div>
+          <div id="video-model-popover" class="video-popover video-model-popover" hidden>
+            <label class="video-popover-label" for="video-provider-picker">Provider</label><select id="video-provider-picker"><option value="openrouter">OpenRouter</option><option value="nvidia">NVIDIA NIM</option><option value="huggingface">Hugging Face</option></select>
+            <label class="video-popover-label" for="video-model-picker">Model</label><input id="video-model-picker" list="dl-video" placeholder="Enter compatible model ID" autocomplete="off" />
+          </div>
+          <div id="video-form-host"></div>
+        </div>
+      </section>
+      <section id="video-idea-starters" class="video-idea-starters" hidden><div class="video-idea-grid"></div><button type="button" class="video-shuffle" id="video-shuffle">Shuffle ideas</button></section>
       <form id="video-form" class="gen-form" novalidate>
         <div class="form-heading"><div><p class="eyebrow">Create</p><h2>Generate video</h2><p>Describe the scene, then choose a model and output format.</p></div></div>
         <label class="field">
@@ -73,7 +117,7 @@
         <div class="field-row three">
           <label class="field"><span class="field-label">Duration: <output id="v-duration-out">8s</output></span><input type="range" id="v-duration" min="4" max="15" step="1" value="8" /></label>
           <label class="field"><span class="field-label">Resolution</span><select id="v-resolution"><option value="480p">480p (cheaper)</option><option value="720p" selected>720p</option><option value="1080p">1080p</option></select></label>
-          <label class="field"><span class="field-label">Aspect ratio</span><select id="v-aspect"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option><option>21:9</option></select></label>
+          <label class="field"><span class="field-label">Aspect ratio</span><select id="v-aspect"><option value="auto">Auto</option><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option><option>3:4</option><option>21:9</option></select></label>
         </div>
         <label class="check"><input type="checkbox" id="v-audio" checked /><span>Generate audio with the video where supported</span></label>
         <div class="batch-controls"><label class="field"><span class="field-label">Batch jobs</span><select id="v-batch-count"><option>1</option><option>2</option><option>5</option><option>10</option><option>25</option><option>50</option><option>100</option></select></label><div class="batch-status" id="v-batch-status" aria-live="polite"></div><button type="button" class="btn btn-ghost" id="v-batch-cancel" hidden>Cancel pending jobs</button></div>

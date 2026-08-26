@@ -158,8 +158,8 @@ const studioComposerTabs = new Set(['video', 'ugc', 'image', 'audio', 'enhance',
 function syncStudioSurface(tab = currentTab) {
   const hero = $('.studio-hero');
   const gallery = $('.studio-gallery');
-  if (hero) hero.hidden = !studioComposerTabs.has(tab);
-  if (gallery) gallery.hidden = !(tab === 'history' || (studioComposerTabs.has(tab) && tab !== 'chat'));
+  if (hero) hero.hidden = tab === 'video' ? true : !studioComposerTabs.has(tab);
+  if (gallery) gallery.hidden = tab === 'video' ? true : !(tab === 'history' || (studioComposerTabs.has(tab) && tab !== 'chat'));
   document.body.dataset.workspace = tab;
   const chatThread = $('#studio-chat-thread');
   const chatResult = $('#c-result');
@@ -184,11 +184,13 @@ $$('.tab').forEach((btn) => btn.addEventListener('click', () => {
   syncStudioSurface(currentTab);
   saveWorkspaceSettings();
   const selectedPanel = document.getElementById(`tab-${currentTab}`);
-  const shellTarget = currentTab === 'history'
-    ? $('.studio-gallery')
-    : studioComposerTabs.has(currentTab)
-      ? $('.studio-hero')
-      : selectedPanel;
+  const shellTarget = currentTab === 'video'
+    ? $('#tab-video .video-prompt-surface')
+    : currentTab === 'history'
+      ? $('.studio-gallery')
+      : studioComposerTabs.has(currentTab)
+        ? $('.studio-hero')
+        : selectedPanel;
   if (shellTarget) requestAnimationFrame(() => shellTarget.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   if (currentTab === 'history') loadHistory(true).catch((err) => showError('#v-error', err));
 }));
@@ -216,6 +218,10 @@ async function loadModels(kind, provider = $(providerByKind[kind])?.value || 'op
     if (list) list.innerHTML = (models || []).map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
     const hint = $(`#${kind[0]}-model-hint`);
     if (hint) hint.textContent = default_model ? `Default: ${default_model}` : `${models?.length || 0} models available`;
+    if (kind === 'video' && default_model) {
+      const modelInput = $('#v-model');
+      if (modelInput && !modelInput.value && !modelInput.dataset.remembered) { modelInput.value = default_model; modelInput.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
     if (kind === 'audio' && default_model) {
       const modelInput = $('#a-model');
       const mode = $('input[name="a-mode"]:checked')?.value || 'speech';
@@ -396,7 +402,7 @@ let inlineErrorTimer;
 function showError(id, err) {
   const el = $(id);
   if (el) { el.hidden = false; el.innerHTML = `<strong>Something went wrong:</strong> ${esc(err.message)}`; }
-  const inline = $('#studio-inline-error');
+  const inline = id === '#v-error' ? $('#video-inline-error') : $('#studio-inline-error');
   if (inline) {
     inline.hidden = false;
     inline.textContent = String(err.message || 'Something went wrong.');
@@ -405,7 +411,7 @@ function showError(id, err) {
   }
   showToast(err.message);
 }
-const clearError = (id) => { $(id)?.setAttribute('hidden', 'true'); $('#studio-inline-error')?.setAttribute('hidden', 'true'); };
+const clearError = (id) => { $(id)?.setAttribute('hidden', 'true'); (id === '#v-error' ? $('#video-inline-error') : $('#studio-inline-error'))?.setAttribute('hidden', 'true'); };
 
 function setStudioRunBusy(isBusy, label = 'Generating…') {
   const btn = $('#studio-run');
@@ -538,7 +544,7 @@ $('#video-form').addEventListener('submit', async (e) => {
       cancelId: '#v-batch-cancel',
       concurrency: 1,
       submit: () => api('/api/v1/videos', { method: 'POST', body: payload }),
-      onSuccess: async (gen) => { trackJob(gen); await waitForVideoTerminal(gen); },
+      onSuccess: async (gen) => { videoSessionHasGeneration = true; syncVideoIdeaStarters(); trackJob(gen); await waitForVideoTerminal(gen); },
     });
     $('#tab-video').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (err) {
@@ -1733,3 +1739,126 @@ $('#labs-credit-form')?.addEventListener('submit', async (event) => {
   try { await api(`${labsApi}/credits`, { method: 'POST', body: { amount: Number($('#labs-credit-amount').value), reason: $('#labs-credit-reason').value.trim() } }); status.textContent = 'Local test credits added.'; loadLabUsage(); } catch (err) { status.textContent = err.message; }
 });
 loadLabsConfig(); loadLabUsage(); loadLabMemory(); loadLabDocuments();
+
+
+/* ======================= Video-only prompt surface ======================== */
+let videoSessionHasGeneration = false;
+let videoIdeaSetIndex = 0;
+let videoDurationModeCustom = false;
+const videoIdeaSets = [
+  [
+    ['✦', 'Animation', 'A paper-cut animation of a tiny city waking up at sunrise'],
+    ['▣', 'Promo video', 'A clean 9:16 product promo with bold type, quick cuts and a confident finish'],
+    ['◈', 'Product demo', 'A polished close-up demo showing how the product works in three simple steps'],
+  ],
+  [
+    ['◌', 'Cinematic', 'A slow cinematic camera move through a misty forest at blue hour'],
+    ['↗', 'Social hook', 'A fast, high-energy social video with an intriguing first-second visual hook'],
+    ['✺', 'Before / after', 'A satisfying before-and-after transformation with a clean reveal at the end'],
+  ],
+  [
+    ['☼', 'Travel', 'A warm travel montage of a coastal town, handheld details and golden-hour light'],
+    ['♢', 'Fashion', 'An editorial fashion walk with soft studio light, fabric movement and a premium look'],
+    ['⌁', 'Food story', 'A close-up food story from ingredients to a beautifully plated final dish'],
+  ],
+];
+const videoPromptInput = $('#video-prompt-input');
+const videoModeButtons = $$('.video-mode-tab');
+const videoSettingsPopover = $('#video-settings-popover');
+const videoModelPopover = $('#video-model-popover');
+const videoSettingsToggle = $('#video-settings-toggle');
+const videoModelChip = $('#video-model-chip');
+const videoIdeaStarters = $('#video-idea-starters');
+
+function videoModeValue() { return $('#v-modes input:checked')?.value || 't2v'; }
+function videoFileLabel(input, fallback) { return input?.files?.[0]?.name || fallback; }
+function syncVideoFrameSlot(slotId, inputId, fallback) {
+  const slot = $(`#${slotId}`); const input = $(`#${inputId}`); if (!slot || !input) return;
+  const hasFile = Boolean(input.files?.length); slot.classList.toggle('has-file', hasFile);
+  const small = slot.querySelector('small'); if (small) small.textContent = videoFileLabel(input, fallback);
+}
+function syncVideoTopSurface() {
+  const mode = videoModeValue();
+  const topTools = $('#video-top-tools');
+  const frameSlots = $('#video-frame-slots');
+  const singleSlot = $('#video-single-frame-slot');
+  if (topTools) topTools.hidden = mode === 'i2v' || mode === 'first_last';
+  if (frameSlots) frameSlots.hidden = mode !== 'first_last';
+  if (singleSlot) singleSlot.hidden = mode !== 'i2v';
+  videoModeButtons.forEach((button) => button.classList.toggle('active', button.dataset.videoMode === mode));
+  syncVideoFrameSlot('video-first-frame-slot', 'v-first', 'Upload image');
+  syncVideoFrameSlot('video-last-frame-slot', 'v-last', 'Upload image');
+  syncVideoFrameSlot('video-single-frame-trigger', 'v-first', 'Upload image to animate');
+  const modeLabel = { t2v: 'Text → Video', i2v: 'Image → Video', first_last: 'First + Last Frame', reference: 'Reference' }[mode];
+  if (videoPromptInput) videoPromptInput.placeholder = mode === 'reference' ? 'Describe the reference-led video you want to make' : 'Describe the video you want to make';
+  document.body.dataset.videoMode = mode;
+  syncVideoSettingsLabel();
+}
+function syncVideoSettingsLabel() {
+  const resolution = $('#v-resolution')?.value || '720p';
+  const aspect = $('#v-aspect')?.value || '16:9';
+  const duration = $('#v-duration')?.value || '8';
+  if (videoSettingsToggle) videoSettingsToggle.innerHTML = `${resolution} · ${aspect} · ${duration}s <span>⌄</span>`;
+  const slider = $('#video-duration-slider'); const display = $('#video-duration-display');
+  if (slider) { slider.min = $('#v-duration')?.min || '4'; slider.max = $('#v-duration')?.max || '15'; slider.step = $('#v-duration')?.step || '1'; slider.value = $('#v-duration')?.value || '8'; slider.disabled = !videoDurationModeCustom; }
+  if (display) display.textContent = `${duration}s`;
+  if ($('#video-audio-pill')) $('#video-audio-pill').classList.toggle('is-on', Boolean($('#v-audio')?.checked));
+  const provider = $('#v-provider')?.value || 'openrouter';
+  const model = $('#v-model')?.value.trim();
+  if (videoModelChip) videoModelChip.innerHTML = `${model || 'Default model'} <span>⌄</span>`;
+  if ($('#video-provider-picker')) $('#video-provider-picker').value = provider;
+  if ($('#video-model-picker') && document.activeElement !== $('#video-model-picker')) $('#video-model-picker').value = model;
+  $('#video-resolution-options')?.querySelectorAll('button').forEach((button) => button.classList.toggle('is-selected', button.dataset.value === resolution));
+  $('#video-aspect-options')?.querySelectorAll('button').forEach((button) => button.classList.toggle('is-selected', button.dataset.value === aspect));
+}
+function setVideoMode(mode) {
+  const radio = $(`#v-modes input[value="${CSS.escape(mode)}"]`);
+  if (!radio) return;
+  radio.checked = true;
+  radio.dispatchEvent(new Event('change', { bubbles: true }));
+  syncVideoTopSurface();
+}
+function renderVideoIdeaStarters() {
+  const grid = videoIdeaStarters?.querySelector('.video-idea-grid'); if (!grid) return;
+  const ideas = videoIdeaSets[videoIdeaSetIndex % videoIdeaSets.length]; grid.replaceChildren();
+  ideas.forEach(([icon, label, prompt]) => {
+    const card = document.createElement('button'); card.type = 'button'; card.className = 'video-idea-card'; card.dataset.prompt = prompt;
+    card.innerHTML = `<span>${icon}</span><strong>${label}</strong>`; grid.appendChild(card);
+  });
+}
+function syncVideoIdeaStarters() {
+  if (!videoIdeaStarters) return;
+  videoIdeaStarters.hidden = Boolean(videoSessionHasGeneration || videoPromptInput?.value.trim());
+}
+function openVideoPopover(popover) {
+  if (!popover) return;
+  if (popover === videoSettingsPopover && videoModelPopover) videoModelPopover.hidden = true;
+  if (popover === videoModelPopover && videoSettingsPopover) videoSettingsPopover.hidden = true;
+  popover.hidden = false;
+}
+function closeVideoPopovers() { if (videoSettingsPopover) videoSettingsPopover.hidden = true; if (videoModelPopover) videoModelPopover.hidden = true; }
+
+videoModeButtons.forEach((button) => button.addEventListener('click', () => setVideoMode(button.dataset.videoMode)));
+['#v-first', '#v-last', '#v-refs'].forEach((selector) => $(selector)?.addEventListener('change', syncVideoTopSurface));
+$('#video-reference-trigger')?.addEventListener('click', () => { setVideoMode('reference'); $('#v-refs')?.click(); });
+$('#video-assets-trigger')?.addEventListener('click', () => { setVideoMode('reference'); $('#v-refs')?.click(); });
+$('#video-first-frame-slot')?.addEventListener('click', () => { setVideoMode('first_last'); $('#v-first')?.click(); });
+$('#video-last-frame-slot')?.addEventListener('click', () => { setVideoMode('first_last'); $('#v-last')?.click(); });
+$('#video-single-frame-trigger')?.addEventListener('click', () => { setVideoMode('i2v'); $('#v-first')?.click(); });
+videoPromptInput?.addEventListener('input', () => { if ($('#v-prompt')) $('#v-prompt').value = videoPromptInput.value; syncVideoIdeaStarters(); });
+$('#v-prompt')?.addEventListener('input', () => { if (videoPromptInput && document.activeElement !== videoPromptInput) videoPromptInput.value = $('#v-prompt').value; syncVideoIdeaStarters(); });
+$('#video-shuffle')?.addEventListener('click', () => { videoIdeaSetIndex = (videoIdeaSetIndex + 1) % videoIdeaSets.length; renderVideoIdeaStarters(); syncVideoIdeaStarters(); });
+videoIdeaStarters?.addEventListener('click', (event) => { const card = event.target.closest('.video-idea-card'); if (!card) return; videoPromptInput.value = card.dataset.prompt; $('#v-prompt').value = card.dataset.prompt; videoPromptInput.dispatchEvent(new Event('input', { bubbles: true })); videoPromptInput.focus(); });
+videoSettingsToggle?.addEventListener('click', () => { syncVideoSettingsLabel(); openVideoPopover(videoSettingsPopover); });
+videoModelChip?.addEventListener('click', () => { syncVideoSettingsLabel(); openVideoPopover(videoModelPopover); });
+$('#video-resolution-options')?.addEventListener('click', (event) => { const button = event.target.closest('button'); if (!button) return; $('#v-resolution').value = button.dataset.value; syncVideoSettingsLabel(); });
+$('#video-aspect-options')?.addEventListener('click', (event) => { const button = event.target.closest('button'); if (!button) return; $('#v-aspect').value = button.dataset.value; syncVideoSettingsLabel(); });
+$('#video-duration-slider')?.addEventListener('input', (event) => { $('#v-duration').value = event.target.value; $('#v-duration').dispatchEvent(new Event('input', { bubbles: true })); syncVideoSettingsLabel(); });
+$('#video-duration-mode')?.addEventListener('click', (event) => { videoDurationModeCustom = !videoDurationModeCustom; event.currentTarget.textContent = videoDurationModeCustom ? 'Custom' : 'Smart'; event.currentTarget.classList.toggle('is-custom', videoDurationModeCustom); syncVideoSettingsLabel(); });
+$('#video-audio-pill')?.addEventListener('click', () => { const audio = $('#v-audio'); if (!audio) return; audio.checked = !audio.checked; audio.dispatchEvent(new Event('change', { bubbles: true })); syncVideoSettingsLabel(); });
+$('#video-provider-picker')?.addEventListener('change', (event) => { $('#v-provider').value = event.target.value; $('#v-provider').dispatchEvent(new Event('change', { bubbles: true })); loadModels('video', event.target.value).finally(syncVideoSettingsLabel); });
+$('#video-model-picker')?.addEventListener('input', (event) => { $('#v-model').value = event.target.value; syncVideoSettingsLabel(); });
+$('#video-submit-button')?.addEventListener('click', () => { const prompt = videoPromptInput?.value.trim() || ''; if ($('#v-prompt')) $('#v-prompt').value = prompt; if (!prompt) { showError('#v-error', new Error('Please enter a prompt.')); videoPromptInput?.focus(); return; } closeVideoPopovers(); $('#video-form')?.requestSubmit(); });
+document.addEventListener('click', (event) => { if (!event.target.closest('.video-prompt-bar')) closeVideoPopovers(); });
+$('#v-resolution')?.addEventListener('change', syncVideoSettingsLabel); $('#v-aspect')?.addEventListener('change', syncVideoSettingsLabel); $('#v-duration')?.addEventListener('input', syncVideoSettingsLabel); $('#v-audio')?.addEventListener('change', syncVideoSettingsLabel); $('#v-provider')?.addEventListener('change', syncVideoSettingsLabel); $('#v-model')?.addEventListener('input', syncVideoSettingsLabel);
+renderVideoIdeaStarters(); syncVideoTopSurface(); syncVideoIdeaStarters();
