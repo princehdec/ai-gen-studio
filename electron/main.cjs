@@ -3,8 +3,10 @@ const { autoUpdater } = require('electron-updater');
 const path = require('node:path');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
+const fs = require('node:fs');
 
 let backendProcess;
+let ollamaProcess;
 let backendPort;
 let backendRestarting = false;
 let mainWindow;
@@ -25,6 +27,38 @@ function projectRoot() {
   return app.isPackaged
     ? path.join(process.resourcesPath, 'app.asar.unpacked')
     : path.join(__dirname, '..');
+}
+
+function isDevBuild() {
+  return app.getName().toLowerCase().includes('dev');
+}
+
+async function ensureOllama() {
+  if (!isDevBuild()) return;
+  try {
+    const response = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1200) });
+    if (response.ok) return;
+  } catch { /* Ollama is not running yet. */ }
+  const candidates = [
+    'ollama.exe',
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe') : '',
+    process.env.ProgramFiles ? path.join(process.env.ProgramFiles, 'Ollama', 'ollama.exe') : '',
+  ].filter(Boolean);
+  const executable = candidates.find((candidate) => candidate === 'ollama.exe' || fs.existsSync(candidate));
+  if (!executable) return;
+  try {
+    ollamaProcess = spawn(executable, ['serve'], { windowsHide: true, stdio: 'ignore' });
+    ollamaProcess.on('error', () => { ollamaProcess = null; });
+    ollamaProcess.unref();
+    const started = Date.now();
+    while (Date.now() - started < 12000) {
+      try {
+        const response = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1000) });
+        if (response.ok) return;
+      } catch { /* Ollama is still starting. */ }
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+  } catch { /* Chat will show the actionable offline message if Ollama is unavailable. */ }
 }
 
 function startBackend(port) {
@@ -163,6 +197,7 @@ function buildApplicationMenu() {
 
 async function createWindow() {
   setupAutoUpdater();
+  await ensureOllama();
   backendPort = await findFreePort();
   startBackend(backendPort);
   await waitForBackend(backendPort);
