@@ -154,13 +154,19 @@ for (const name of rememberedRadioGroups) {
 }
 
 /* --------------------------------- tabs ---------------------------------- */
-const studioComposerTabs = new Set(['video', 'ugc', 'image', 'audio', 'chat']);
+const studioComposerTabs = new Set(['video', 'ugc', 'image', 'audio', 'enhance', 'chat', 'labs']);
 function syncStudioSurface(tab = currentTab) {
   const hero = $('.studio-hero');
   const gallery = $('.studio-gallery');
-  if (hero) hero.hidden = !studioComposerTabs.has(tab);
-  if (gallery) gallery.hidden = tab !== 'history';
+  if (hero) hero.hidden = !(studioComposerTabs.has(tab) || tab === 'history');
+  if (gallery) gallery.hidden = !(tab === 'history' || (studioComposerTabs.has(tab) && tab !== 'chat'));
   document.body.dataset.workspace = tab;
+  const chatThread = $('#studio-chat-thread');
+  const chatResult = $('#c-result');
+  if (chatThread && chatResult) {
+    if (chatResult.parentNode !== chatThread) chatThread.append(chatResult);
+    chatThread.hidden = tab !== 'chat';
+  }
 }
 
 $$('.tab').forEach((btn) => btn.addEventListener('click', () => {
@@ -375,16 +381,44 @@ async function deleteGeneration(gen, el) {
 }
 
 /* ------------------------------ error banners ----------------------------- */
+let toastTimer;
+function showToast(message) {
+  let root = $('#toast-root');
+  if (!root) { root = document.createElement('div'); root.id = 'toast-root'; root.setAttribute('aria-live', 'polite'); document.body.appendChild(root); }
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-error';
+  toast.textContent = String(message || 'Something went wrong.');
+  root.replaceChildren(toast);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.remove(), 5200);
+}
+let inlineErrorTimer;
 function showError(id, err) {
   const el = $(id);
-  el.hidden = false;
-  el.innerHTML = `<strong>Something went wrong:</strong> ${esc(err.message)}`;
+  if (el) { el.hidden = false; el.innerHTML = `<strong>Something went wrong:</strong> ${esc(err.message)}`; }
+  const inline = $('#studio-inline-error');
+  if (inline) {
+    inline.hidden = false;
+    inline.textContent = String(err.message || 'Something went wrong.');
+    clearTimeout(inlineErrorTimer);
+    inlineErrorTimer = setTimeout(() => { inline.hidden = true; }, 7000);
+  }
+  showToast(err.message);
 }
-const clearError = (id) => { $(id).hidden = true; };
+const clearError = (id) => { $(id)?.setAttribute('hidden', 'true'); $('#studio-inline-error')?.setAttribute('hidden', 'true'); };
 
+function setStudioRunBusy(isBusy, label = 'Generating…') {
+  const btn = $('#studio-run');
+  if (!btn) return;
+  btn.classList.toggle('is-busy', isBusy);
+  btn.disabled = isBusy;
+  btn.setAttribute('aria-busy', String(isBusy));
+  btn.textContent = isBusy ? label : (btn.dataset.label || 'Generate ↗');
+}
 function busy(btn, isBusy, label) {
   btn.disabled = isBusy;
   btn.textContent = isBusy ? label : btn.dataset.label;
+  if (btn.closest('#studio-inline-content')) setStudioRunBusy(isBusy, label);
 }
 
 /* ------------------------------ batch queue -------------------------------- */
@@ -802,6 +836,7 @@ async function loadHistory(reset) {
 function refreshHistoryCount() {
   historyDirty = true;
   if (currentTab === 'history') loadHistory(true);
+  if (typeof refreshStudioGallery === 'function') refreshStudioGallery();
 }
 
 /* ------------------------- restore in-flight jobs -------------------------- */
@@ -1312,6 +1347,7 @@ const studioPrompt = $('#studio-prompt');
 const studioWorkspace = $('#studio-workspace-select');
 let studioGalleryMode = 'inspiration';
 let studioGalleryRows = [];
+const studioInlineWorkspace = $('#studio-inline-workspace');
 const studioInlineContent = $('#studio-inline-content');
 const studioFormStaging = $('#studio-form-staging');
 const inlineWorkspaceToggle = $('#inline-workspace-toggle');
@@ -1319,6 +1355,7 @@ const inlineWorkspaceSummary = $('#inline-workspace-summary');
 const inlineFormSelectors = {
   video: '#video-form',
   ugc: '#ugc-brief-form',
+  enhance: '#enhance-form',
   image: '#image-form',
   audio: '#audio-form',
   chat: '#chat-form',
@@ -1326,6 +1363,7 @@ const inlineFormSelectors = {
 const inlinePromptSelectors = {
   video: '#v-prompt',
   ugc: '#ugc-product',
+  enhance: null,
   image: '#i-prompt',
   audio: '#a-text',
   chat: '#c-prompt',
@@ -1335,7 +1373,9 @@ const inlineWorkspaceSummaries = {
   ugc: 'Brief, platform, planner and references',
   image: 'Model, aspect ratio, format and batch',
   audio: 'Mode, voice, format and batch',
+  enhance: 'Source video, workflow and output settings',
   chat: 'Provider, model, instructions and parameters',
+  labs: 'Compare, RAG, workflows, dubbing and Dev tools',
 };
 const inlineFormOrigins = new Map();
 const inlinePromptByFormId = new Map();
@@ -1353,33 +1393,52 @@ function restoreInlineForm(form) {
   if (!form) return;
   form.classList.remove('composer-inline-form');
   form.querySelector('.form-heading')?.removeAttribute('hidden');
-  const prompt = $(inlinePromptByFormId.get(form.id));
+  const promptSelector = inlinePromptByFormId.get(form.id);
+  const prompt = promptSelector ? $(promptSelector) : null;
   prompt?.closest('.field')?.removeAttribute('hidden');
   if (studioFormStaging && form.parentNode !== studioFormStaging) studioFormStaging.append(form);
 }
 
 function setInlineWorkspace(tab = studioWorkspace?.value || 'video') {
-  const form = $(inlineFormSelectors[tab] || inlineFormSelectors.video);
-  if (!form || !studioInlineContent) return;
+  const selector = inlineFormSelectors[tab];
+  const form = selector ? $(selector) : null;
+  if (!studioInlineContent) return;
   const currentForm = studioInlineContent.querySelector(':scope > form');
   if (currentForm && currentForm !== form) restoreInlineForm(currentForm);
+  if (!form) {
+    studioInlineContent.replaceChildren();
+    if (inlineWorkspaceSummary) inlineWorkspaceSummary.textContent = inlineWorkspaceSummaries[tab] || 'Choose a Dev Lab below';
+    return;
+  }
   studioInlineContent.replaceChildren(form);
   form.classList.add('composer-inline-form');
   form.querySelector('.form-heading')?.setAttribute('hidden', 'true');
-  const prompt = $(inlinePromptSelectors[tab]);
+  const promptSelector = inlinePromptSelectors[tab];
+  const prompt = promptSelector ? $(promptSelector) : null;
   prompt?.closest('.field')?.setAttribute('hidden', 'true');
   if (inlineWorkspaceSummary) inlineWorkspaceSummary.textContent = inlineWorkspaceSummaries[tab] || 'Workspace controls';
 }
 
 function setInlineOptionsOpen(open) {
   if (!studioInlineContent || !inlineWorkspaceToggle) return;
+  if (studioInlineWorkspace) {
+    studioInlineWorkspace.hidden = !open;
+    studioInlineWorkspace.setAttribute('aria-hidden', String(!open));
+  }
   studioInlineContent.hidden = !open;
   inlineWorkspaceToggle.setAttribute('aria-expanded', String(open));
-  inlineWorkspaceToggle.textContent = open ? 'Hide options' : 'Show options';
+  inlineWorkspaceToggle.setAttribute('aria-label', open ? 'Close Advanced Options' : 'Open Advanced Options');
+  inlineWorkspaceToggle.title = open ? 'Close Advanced Options' : 'Advanced Options';
+  inlineWorkspaceToggle.textContent = '⚙';
 }
 
 inlineWorkspaceToggle?.addEventListener('click', () => setInlineOptionsOpen(studioInlineContent?.hidden));
-
+$('#tab-btn-history')?.addEventListener('click', () => {
+  if (studioWorkspace && studioWorkspace.value === 'labs') studioWorkspace.value = 'video';
+  setInlineWorkspace(studioWorkspace?.value || 'video');
+  syncStudioComposer();
+  setInlineOptionsOpen(false);
+});
 
 function selectStudioTab(tab) {
   document.querySelector(`.tab[data-tab="${CSS.escape(tab)}"]`)?.click();
@@ -1398,6 +1457,12 @@ function syncStudioComposer() {
   } else if (tab === 'audio') {
     $('#studio-format-chip').textContent = 'Speech / Music';
     $('#studio-audio-chip').textContent = '◉ Audio';
+  } else if (tab === 'enhance') {
+    $('#studio-format-chip').textContent = 'HQ / Cleanup';
+    $('#studio-audio-chip').textContent = 'Local';
+  } else if (tab === 'labs') {
+    $('#studio-format-chip').textContent = 'Dev tools';
+    $('#studio-audio-chip').textContent = 'Experimental';
   } else {
     $('#studio-format-chip').textContent = tab === 'image' ? 'Image' : 'Chat';
     $('#studio-audio-chip').textContent = 'Workspace';
@@ -1419,16 +1484,34 @@ $$('.tab').forEach((btn) => btn.addEventListener('click', () => {
 }));
 ['#v-aspect', '#v-duration', '#v-audio', '#ugc-platform', '#ugc-duration', '#ugc-voiceover'].forEach((selector) => $(selector)?.addEventListener('input', syncStudioComposer));
 ['#v-aspect', '#v-duration', '#v-audio', '#ugc-platform', '#ugc-duration', '#ugc-voiceover'].forEach((selector) => $(selector)?.addEventListener('change', syncStudioComposer));
-$('#studio-format-chip')?.addEventListener('click', () => selectStudioTab(studioWorkspace?.value || 'video'));
-$('#studio-audio-chip')?.addEventListener('click', () => selectStudioTab(studioWorkspace?.value || 'video'));
+  function openComposerOptions(fieldSelector) {
+    const tab = studioWorkspace?.value || 'video';
+    setInlineWorkspace(tab);
+    setInlineOptionsOpen(true);
+    selectStudioTab(tab);
+    requestAnimationFrame(() => $(fieldSelector)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  }
+$('#studio-format-chip')?.addEventListener('click', () => openComposerOptions(studioWorkspace?.value === 'image' ? '#i-aspect' : studioWorkspace?.value === 'audio' ? '#a-text' : '#v-aspect'));
+$('#studio-audio-chip')?.addEventListener('click', () => openComposerOptions(studioWorkspace?.value === 'ugc' ? '#ugc-voiceover' : studioWorkspace?.value === 'video' ? '#v-audio' : '#a-voice'));
 
 $('#studio-run')?.addEventListener('click', () => {
+  $('#studio-run').dataset.label ??= $('#studio-run').textContent;
   const tab = studioWorkspace?.value || 'video';
   const prompt = studioPrompt?.value.trim() || '';
-  const target = $(inlinePromptSelectors[tab]);
-  const form = $(inlineFormSelectors[tab]);
+  const targetSelector = inlinePromptSelectors[tab];
+  const target = targetSelector ? $(targetSelector) : null;
+  const formSelector = inlineFormSelectors[tab];
+  const form = formSelector ? $(formSelector) : null;
   setInlineWorkspace(tab);
   selectStudioTab(tab);
+  if (tab === 'labs') {
+    $('#tab-labs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  if (tab === 'enhance') {
+    form?.requestSubmit();
+    return;
+  }
   if (!prompt) {
     setInlineOptionsOpen(false);
     studioPrompt?.focus();
@@ -1451,7 +1534,7 @@ $('#studio-open-assets')?.addEventListener('click', () => {
   $('#ugc-assets')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
 $('#studio-open-library')?.addEventListener('click', () => selectStudioTab('history'));
-const initialComposerTab = studioComposerTabs.has(currentTab) ? currentTab : (studioWorkspace?.value || 'video');
+  const initialComposerTab = studioComposerTabs.has(currentTab) ? currentTab : (studioWorkspace?.value || 'video');
 if (studioWorkspace && studioComposerTabs.has(currentTab)) studioWorkspace.value = currentTab;
 setInlineWorkspace(initialComposerTab);
 setInlineOptionsOpen(false);
@@ -1468,7 +1551,11 @@ function renderStudioGallery() {
   const host = $('#studio-gallery-grid');
   if (!host) return;
   const query = ($('#studio-gallery-search')?.value || '').trim().toLowerCase();
-  const rows = studioGalleryRows.filter((row) => !query || `${row.name || ''} ${row.prompt || ''} ${row.type || ''} ${row.description || ''}`.toLowerCase().includes(query));
+  const activeMode = studioWorkspace?.value || currentTab;
+  const modeRows = studioGalleryMode === 'assets' || activeMode === 'history'
+    ? studioGalleryRows
+    : studioGalleryRows.filter((row) => row.type === activeMode);
+  const rows = modeRows.filter((row) => !query || `${row.name || ''} ${row.prompt || ''} ${row.type || ''} ${row.description || ''}`.toLowerCase().includes(query));
   host.replaceChildren();
   if (!rows.length) {
     const empty = document.createElement('div');
