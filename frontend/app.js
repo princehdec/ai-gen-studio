@@ -158,7 +158,7 @@ const studioComposerTabs = new Set(['video', 'ugc', 'image', 'audio', 'enhance',
 function syncStudioSurface(tab = currentTab) {
   const hero = $('.studio-hero');
   const gallery = $('.studio-gallery');
-  if (hero) hero.hidden = !(studioComposerTabs.has(tab) || tab === 'history');
+  if (hero) hero.hidden = !studioComposerTabs.has(tab);
   if (gallery) gallery.hidden = !(tab === 'history' || (studioComposerTabs.has(tab) && tab !== 'chat'));
   document.body.dataset.workspace = tab;
   const chatThread = $('#studio-chat-thread');
