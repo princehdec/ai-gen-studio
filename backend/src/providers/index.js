@@ -58,6 +58,10 @@ export async function listOpenAIModels(provider) {
     if (raw.length) return raw.map((m) => ({ id: m.id || m.name, name: m.name || m.id, capabilities: provider.capabilities }));
   } catch (err) {
     const catalogUnsupported = [404, 405, 501].includes(err?.status);
+    // Keep the local model selectable while Ollama is starting or temporarily offline.
+    if (provider.id === 'ollama' && provider.staticModels?.length) {
+      return provider.staticModels.map((m) => ({ id: m.id, name: m.name || m.id, capabilities: provider.capabilities }));
+    }
     if (!provider.staticModels?.length || !catalogUnsupported) throw err;
   }
   return (provider.staticModels || []).map((m) => ({
@@ -114,16 +118,24 @@ export async function providerFetchUrl(provider, url, { method = 'GET', json, ti
 }
 
 export async function createOpenAIChat(provider, body, { timeoutMs = 180000 } = {}) {
-  const response = await fetch(providerPath(provider, '/chat/completions'), {
-    method: 'POST',
-    headers: {
-      ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
-      'Content-Type': 'application/json',
-      Accept: body.stream ? 'text/event-stream' : 'application/json',
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  let response;
+  try {
+    response = await fetch(providerPath(provider, '/chat/completions'), {
+      method: 'POST',
+      headers: {
+        ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
+        'Content-Type': 'application/json',
+        Accept: body.stream ? 'text/event-stream' : 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+    throw new HttpError(timedOut ? 504 : 502, timedOut
+      ? `${provider.name} request timed out. Make sure the local model is loaded and try again.`
+      : `Could not reach ${provider.name}. Start Ollama and confirm it is running on 127.0.0.1:11434, then try again.`, { retryable: true });
+  }
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     let payload = null;

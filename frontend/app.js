@@ -224,7 +224,10 @@ async function loadModels(kind, provider = $(providerByKind[kind])?.value || 'op
     }
   } catch (err) {
     const hint = $(`#${kind[0]}-model-hint`);
-    if (hint) hint.textContent = `Could not load models — enter an ID manually`;
+    if (hint) hint.textContent = kind === 'chat' && provider === 'ollama'
+      ? 'Ollama is offline — start Ollama; Gemma 4 E4B remains selected.'
+      : 'Could not load models — enter an ID manually';
+    if (kind === 'chat' && provider === 'ollama' && !$('#c-model')?.value) $('#c-model').value = 'gemma4:e4b';
   }
 }
 for (const kind of MODEL_KINDS) loadModels(kind);
